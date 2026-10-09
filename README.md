@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # No Cap — nocapflip.com
 
 The game is plain static files, no build step:
@@ -37,3 +38,8 @@ On iPhone the download lands in Files; on Android in Downloads. Upload straight 
 ## Notes
 - Physics: Matter.js from cdnjs. Fonts: Google Fonts. Fart recordings: fartscroll.js by The Onion (MIT).
 - The share link is whatever URL the page is served from, plus `#CODE`.
+=======
+# nocapflip
+# nocapflip
+Repo the makes games
+>>>>>>> 360fda4adbd36f938f1af2b94198dc758cfcb283
