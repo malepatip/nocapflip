@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>No Cap</title>
+<meta name="description" content="Water bottle flip, the unofficial sport of the lunch table, in your browser. Real physics, nine kids to beat, play by link across phones, every game recorded.">
+<meta name="theme-color" content="#cfe0d1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="No Cap">
+<meta property="og:title" content="No Cap · the unofficial sport of the lunch table">
+<meta property="og:description" content="Swipe up, it flips once, it lands upright. Nine kids between you and the 40 oz. Play by link across phones.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://nocapflip.com/">
+<link rel="canonical" href="https://nocapflip.com/">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Fredoka:wght@400;500;600;700&display=swap">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+
+
+<style>
+/* Layout: one phone-shaped stage column (9:16) on a cafeteria wall; stamps and cards float over the canvas like thumbnail text. Single committed look: fluorescent-lit lunchroom. */
+:root {
+  --wall: #cfe0d1;        /* cinder-block mint */
+  --wall-2: #b3c9b6;      /* mortar / shadow */
+  --paper: #fbf7ec;       /* notebook white */
+  --ink: #1e2a23;         /* green-biased near-black */
+  --ink-2: #5a6a5f;
+  --table: #d9c69d;       /* speckled laminate */
+  --table-2: #a98e5c;
+  --red: #d9342b;         /* lunch-tray red */
+  --blue: #2a5bd7;        /* lunch-tray blue */
+  --yellow: #f4b41b;      /* lunch-tray yellow */
+  --green: #2f9e5b;       /* stool green */
+  --display: 'Luckiest Guy', 'Arial Black', Impact, sans-serif;
+  --body: 'Fredoka', 'Trebuchet MS', 'Segoe UI', sans-serif;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--wall); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.4;
+  background-image: linear-gradient(var(--wall-2) 1px, transparent 1px), linear-gradient(90deg, var(--wall-2) 1px, transparent 1px);
+  background-size: 100% 48px, 96px 48px; overflow: hidden; }
+* { box-sizing: border-box; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+#app { height: 100%; display: flex; justify-content: center; padding-inline: 0; }
+.screen { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; background: var(--wall); overflow: hidden; }
+.screen > .scroll, .screen > .topbar, .screen > .hud, .screen > .hint { width: 100%; max-width: 640px; margin-inline: auto; }
+.screen[hidden] { display: none !important; }
+.scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 16px 28px; }
+@media (min-width: 900px) { .scroll { max-width: 760px; } }
+
+/* type */
+h1, h2, h3 { margin: 0; font-family: var(--display); font-weight: 400; letter-spacing: 0.01em; text-wrap: balance; line-height: 1; }
+h1 { font-size: clamp(64px, 20vw, 92px); color: var(--red); -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; text-shadow: 4px 4px 0 var(--ink); transform: rotate(-3deg); }
+h2 { font-size: 30px; }
+h3 { font-size: 20px; }
+p { margin: 0; max-width: 34em; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* buttons: lunch-tray plastic */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 10px 18px; border: 3px solid var(--ink); border-radius: 14px; background: var(--paper); font-weight: 700; font-size: 17px; box-shadow: 0 4px 0 var(--ink); transition: transform .08s, box-shadow .08s; user-select: none; -webkit-user-select: none; }
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+.btn-red { background: var(--red); color: #fff; }
+.btn-blue { background: var(--blue); color: #fff; }
+.btn-yellow { background: var(--yellow); color: var(--ink); }
+.btn-ghost { background: transparent; box-shadow: none; border-color: transparent; min-height: 40px; padding: 6px 10px; color: var(--ink-2); }
+.btn-ghost:active { transform: none; }
+.btn-wide { width: 100%; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; box-shadow: none; transform: none; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+
+/* toggles */
+.toggle { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border: 2px solid var(--ink); border-radius: 999px; background: var(--paper); font-size: 14px; font-weight: 600; }
+.toggle .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--wall-2); border: 2px solid var(--ink); }
+.toggle[aria-pressed="true"] .dot { background: var(--green); }
+
+/* home */
+.hero { padding: 18px 0 8px; display: flex; flex-direction: column; gap: 10px; }
+.hero .sub { font-family: var(--display); font-size: 22px; color: var(--ink); transform: rotate(-1deg); }
+.card { background: var(--paper); border: 2px solid var(--ink); border-radius: 12px; padding: 14px; }
+.rules { display: grid; grid-template-columns: 28px 1fr; gap: 6px 10px; align-items: start; font-size: 15px; }
+.rules b { font-family: var(--display); font-size: 20px; color: var(--red); line-height: 1; }
+.stat-strip { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--ink-2); }
+.stat-strip strong { color: var(--ink); font-size: 16px; }
+
+/* seating chart */
+.seats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.seat { display: grid; grid-template-columns: 56px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; background: var(--paper); border: 2px solid var(--ink); border-radius: 12px; text-align: left; width: 100%; }
+.seat.locked { opacity: .55; }
+.seat.next { border-color: var(--red); box-shadow: 0 4px 0 var(--red); }
+.stool { width: 52px; height: 52px; border-radius: 50%; border: 3px solid var(--ink); display: grid; place-items: center; font-family: var(--display); font-size: 22px; color: #fff; text-shadow: 1px 1px 0 var(--ink); }
+.seat .who { min-width: 0; }
+.seat .who .name { font-weight: 700; font-size: 17px; }
+.seat .who .line { font-size: 13px; color: var(--ink-2); }
+.seat .status { font-family: var(--display); font-size: 26px; line-height: 1; }
+.seat .status.w { color: var(--green); }
+.seat .status.next { color: var(--red); font-size: 16px; }
+.bottles { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; }
+.bottle-pick { flex: 0 0 auto; width: 92px; padding: 8px 6px; border: 2px solid var(--ink); border-radius: 10px; background: var(--paper); font-size: 12px; font-weight: 600; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.bottle-pick[aria-pressed="true"] { background: var(--yellow); box-shadow: 0 3px 0 var(--ink); }
+.bottle-pick[disabled] { opacity: .4; }
+.bottle-pick canvas { width: 36px; height: 72px; }
+.bottle-pick small { color: var(--ink-2); font-weight: 500; }
+
+/* match */
+.hud { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; padding: 10px 14px 6px; }
+.hud .side { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hud .side.r { text-align: right; align-items: flex-end; }
+.hud .name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.hud .name.active::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--red); margin-right: 6px; vertical-align: middle; }
+.hud .side.r .name.active::before { display: none; }
+.hud .side.r .name.active::after { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--red); margin-left: 6px; vertical-align: middle; }
+.pips { display: flex; gap: 4px; }
+.pip { width: 12px; height: 22px; border: 2px solid var(--ink); border-radius: 3px 3px 5px 5px; background: var(--paper); }
+.pip.on { background: var(--green); }
+.hud .mid { font-family: var(--display); font-size: 36px; line-height: 1; letter-spacing: 0.04em; }
+.hud .goal { font-size: 11px; color: var(--ink-2); text-align: center; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.stage { position: relative; flex: 1; min-height: 0; width: 100%; display: flex; justify-content: center; align-items: center; touch-action: none; background: #0f1a14; }
+.seg.wrap { flex-wrap: wrap; }
+.stage canvas { max-width: 100%; max-height: 100%; aspect-ratio: 9 / 16; display: block; background: #8fb49a; }
+.stage .overlay, .stage .sheet { max-width: 100%; }
+:fullscreen .screen, :-webkit-full-screen .screen { background: #0f1a14; }
+.overlay { position: absolute; inset: 0; pointer-events: none; display: grid; place-items: center; }
+.stamp { font-family: var(--display); font-size: clamp(44px, 16vmin, 84px); color: var(--yellow); -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 6px 6px 0 var(--ink); line-height: 1; text-align: center; transform: rotate(-6deg) scale(0); animation: pop .5s cubic-bezier(.2,1.6,.4,1) forwards; }
+.stamp.small { font-size: clamp(26px, 8vmin, 42px); color: var(--paper); }
+.stamp.red { color: var(--red); }
+.stamp.blue { color: #7fb3ff; }
+.stamp.green { color: #6fe09a; }
+.stamp.sub { font-size: clamp(18px, 6vmin, 30px); color: var(--paper); margin-top: 8px; }
+.stamp-wrap { display: flex; flex-direction: column; align-items: center; }
+@keyframes pop { to { transform: rotate(-6deg) scale(1); } }
+.toast { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 8px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; }
+.hint { padding: 8px 16px 12px; text-align: center; font-size: 14px; color: var(--ink-2); min-height: 38px; }
+.hint b { color: var(--ink); }
+
+/* cards over the stage (episode title, end card, 2P setup) */
+.sheet { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(30, 42, 35, .55); }
+.sheet .card { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 12px; box-shadow: 6px 6px 0 var(--ink); }
+.ep { font-family: var(--display); font-size: 14px; letter-spacing: .14em; color: var(--red); }
+.vs { font-family: var(--display); font-size: 40px; line-height: 1; }
+.count { font-family: var(--display); font-size: 96px; line-height: 1; color: var(--yellow); -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 6px 6px 0 var(--ink); }
+.delta { font-family: var(--display); font-size: 34px; line-height: 1; }
+.delta.up { color: var(--green); } .delta.down { color: var(--red); }
+.recap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.recap div { background: var(--wall); border-radius: 8px; padding: 8px; text-align: center; }
+.recap b { display: block; font-family: var(--display); font-size: 24px; line-height: 1; }
+.recap span { font-size: 11px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+input[type="text"] { font: inherit; font-weight: 600; padding: 10px 12px; border: 2px solid var(--ink); border-radius: 10px; background: #fff; width: 100%; min-width: 0; }
+label { font-size: 13px; font-weight: 700; color: var(--ink-2); display: flex; flex-direction: column; gap: 4px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px 0; gap: 8px; }
+.topbar .grp { display: flex; gap: 6px; align-items: center; }
+.link-box { display: flex; gap: 8px; align-items: center; }
+.link-box code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; background: var(--wall); border-radius: 8px; padding: 8px 10px; user-select: all; -webkit-user-select: all; }
+.code-big { font-family: var(--display); font-size: 44px; letter-spacing: .12em; line-height: 1; color: var(--blue); }
+.plist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.plist li { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; background: var(--wall); border-radius: 8px; font-weight: 600; font-size: 15px; }
+.plist li span:last-child { color: var(--ink-2); font-weight: 500; font-size: 13px; }
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg button { flex: 1; min-height: 40px; padding: 6px 10px; border: 2px solid var(--ink); border-radius: 10px; background: var(--paper); font-weight: 600; font-size: 14px; }
+.seg button[aria-pressed="true"] { background: var(--yellow); box-shadow: 0 3px 0 var(--ink); }
+.tapes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tape { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 10px 12px; background: var(--paper); border: 2px solid var(--ink); border-radius: 12px; }
+.tape .t { font-weight: 700; font-size: 15px; }
+.tape .s { font-size: 13px; color: var(--ink-2); }
+.tape .rec { font-family: var(--display); color: var(--red); font-size: 18px; }
+.note { font-size: 13px; color: var(--ink-2); }
+.note.warn { color: var(--red); font-weight: 600; }
+.clip-on .hud, .clip-on .hint, .clip-on .topbar { visibility: hidden; }
+.clip-on .stage canvas { border-block-color: transparent; }
+.clipbar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; background: var(--ink); color: var(--paper); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 700; }
+.clipbar .rec, .recbadge .rec { width: 10px; height: 10px; border-radius: 50%; background: var(--red); animation: blink 1.2s infinite; }
+.recbadge { position: absolute; top: 10px; left: 10px; display: flex; gap: 6px; align-items: center; background: rgba(30,42,35,.85); color: #fff; border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 700; letter-spacing: .06em; pointer-events: none; }
+.clip-on .recbadge { top: auto; bottom: 10px; }
+.stage .overlay { display: none; }
+@keyframes blink { 50% { opacity: .2; } }
+@media (prefers-reduced-motion: reduce) { .stamp { animation-duration: .01s; } .clipbar .rec { animation: none; } .btn { transition: none; } }
+@media (min-width: 520px) { .screen { margin-block: 0; } }
+</style>
+<div id="app">
+
+  <section class="screen" id="home">
+    <div class="scroll stack">
+      <div class="hero">
+        <h1>NO CAP</h1>
+        <div class="sub">the unofficial sport of the lunch table</div>
+        <p>Water bottle flip. Swipe up, it flips once, it lands upright. You know the game. This is that game, same bottles, same cafeteria table, in your browser.</p>
+      </div>
+      <div class="card rules">
+        <b>1</b><div>Swipe up to flip. Power and angle are yours; the physics is real.</div>
+        <b>2</b><div>Land it upright, that's a point. On the cap? That's 1,000 aura and everyone at the table saw it.</div>
+        <b>3</b><div>Nine kids sit between you and the 40 oz. Beat a kid, keep their bottle. Beat the table, keep the 40 oz.</div>
+      </div>
+      <div class="stack" style="gap:10px">
+        <button class="btn btn-red btn-wide" id="btnLadder">Flip the table</button>
+        <button class="btn btn-blue btn-wide" id="btnLink">Play by link · phones</button>
+        <button class="btn btn-wide" id="btnTwo">2 player · one phone</button>
+        <div class="row" style="flex-wrap:nowrap">
+          <input type="text" id="joinCode" maxlength="5" placeholder="Got a code? Type it" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase;flex:1">
+          <button class="btn btn-yellow" id="btnJoin">Join</button>
+        </div>
+        <p class="note" id="linkNote"></p>
+      </div>
+      <div class="row">
+        <button class="toggle" id="togClip" aria-pressed="false"><span class="dot"></span>Clip mode</button>
+        <button class="toggle" id="togSound" aria-pressed="true"><span class="dot"></span>Sound</button>
+        <button class="toggle" id="togRec" aria-pressed="true"><span class="dot"></span>Record my games</button>
+      </div>
+      <p class="note">Every game is recorded by default, two ways. A <b>video</b> of the table (1080×1920 vertical, with sound, ready for Shorts) records on this device while you play; a red REC timer shows it running, and the end card has a Save button. A <b>tape</b> (every flip, replayable) is saved to the shared shelf below so anyone with the link can watch it back. Clip mode adds the countdown and hides the buttons for screen recordings.</p>
+      <div class="row" id="lastVideo" hidden><button class="btn btn-yellow" id="btnSaveHome">Save last video</button><span class="note" id="videoNote"></span></div>
+      <div class="stat-strip" id="homeStats"></div>
+      <div>
+        <div class="eyebrow">Tapes</div>
+        <h3>Recorded games</h3>
+      </div>
+      <ul class="tapes" id="tapes"><li class="note">Loading tapes…</li></ul>
+      <p class="note">Fart recordings from fartscroll.js by The Onion (MIT). Physics by Matter.js.</p>
+    </div>
+  </section>
+
+  <section class="screen" id="table" hidden>
+    <div class="topbar">
+      <button class="btn btn-ghost" id="btnHome1">&larr; Home</button>
+      <span class="tag" id="auraTag">0 aura</span>
+    </div>
+    <div class="scroll stack">
+      <div>
+        <div class="eyebrow">4th period lunch · table 7</div>
+        <h2>The seating chart</h2>
+      </div>
+      <ul class="seats" id="seats"></ul>
+      <div>
+        <div class="eyebrow">Your backpack</div>
+        <h3>Pick what you flip</h3>
+        <p style="font-size:13px;color:var(--ink-2);margin-top:4px">Heavier bottles are harder to land and pay more aura per land.</p>
+      </div>
+      <div class="bottles" id="backpack"></div>
+      <button class="btn btn-ghost" id="btnReset">Reset progress</button>
+    </div>
+  </section>
+
+  <section class="screen" id="match" hidden>
+    <div class="topbar">
+      <button class="btn btn-ghost" id="btnQuit">&larr; Leave</button>
+      <div class="grp"><span class="tag" id="roomTag" hidden>CODE</span><span class="tag" id="matchAura">0 aura</span><button class="btn btn-ghost" id="btnFull" title="Full screen">&#x26F6;</button></div>
+    </div>
+    <div class="hud">
+      <div class="side"><div class="name" id="nameL">You</div><div class="pips" id="pipsL"></div></div>
+      <div><div class="mid num" id="score">0&ndash;0</div><div class="goal" id="goal">first to 3</div></div>
+      <div class="side r"><div class="name" id="nameR">Ezra</div><div class="pips" id="pipsR"></div></div>
+    </div>
+    <div class="stage" id="stage">
+      <canvas id="cv" width="540" height="960" aria-label="Lunch table. Swipe up on it to flip the bottle."></canvas>
+      <div class="overlay" id="overlay"></div>
+      <div class="clipbar" id="clipbar" hidden><span class="rec"></span><span id="clipTitle">EP 1</span></div>
+      <div class="recbadge" id="recBadge" hidden><span class="rec"></span>REC <span id="recTime" class="num">0:00</span></div>
+      <div class="toast" id="toast" hidden></div>
+
+      <div class="sheet" id="sheetEp" hidden>
+        <div class="card">
+          <div class="ep" id="epLabel">EPISODE 1</div>
+          <div class="vs" id="epVs">YOU vs EZRA</div>
+          <p id="epLine"></p>
+          <p id="epRules" style="font-size:14px;color:var(--ink-2)"></p>
+          <div class="count" id="epCount" hidden>3</div>
+          <button class="btn btn-red btn-wide" id="btnStart">Flip</button>
+        </div>
+      </div>
+
+      <div class="sheet" id="sheetEnd" hidden>
+        <div class="card">
+          <div class="ep" id="endLabel">RESULT</div>
+          <div class="vs" id="endTitle">W</div>
+          <p id="endLine"></p>
+          <div class="delta" id="endDelta"></div>
+          <div class="recap" id="endRecap"></div>
+          <button class="btn btn-yellow btn-wide" id="btnSave" hidden>Save video</button>
+          <p class="note" id="endVideo" hidden></p>
+          <button class="btn btn-red btn-wide" id="btnNext">Next kid</button>
+          <button class="btn btn-wide" id="btnAgain">Run it back</button>
+          <button class="btn btn-ghost btn-wide" id="btnToTable">Back to the table</button>
+        </div>
+      </div>
+
+      <div class="sheet" id="sheetTwo" hidden>
+        <div class="card">
+          <div class="ep">2 PLAYER · ONE PHONE</div>
+          <div class="vs">PASS IT</div>
+          <label>Player 1<input type="text" id="p1" maxlength="14" placeholder="Name" autocomplete="off"></label>
+          <label>Player 2<input type="text" id="p2" maxlength="14" placeholder="Name" autocomplete="off"></label>
+          <div class="eyebrow">Where</div>
+          <div class="seg wrap" id="segVenue2"><button aria-pressed="true" data-v="cafeteria">Cafeteria</button><button data-v="classroom">Classroom</button><button data-v="restroom">Restroom</button><button data-v="gym">Gym</button><button data-v="hallway">Hallway</button><button data-v="outside">Outside</button></div>
+          <p style="font-size:14px;color:var(--ink-2)">Take turns. First to 3 lands. Cap land counts as 2.</p>
+          <button class="btn btn-blue btn-wide" id="btnTwoStart">Start</button>
+          <button class="btn btn-ghost btn-wide" id="btnTwoCancel">Cancel</button>
+        </div>
+      </div>
+
+      <div class="sheet" id="sheetRoom" hidden>
+        <div class="card">
+          <div class="ep">PLAY BY LINK</div>
+          <div class="vs">MAKE A TABLE</div>
+          <label>Your name<input type="text" id="hostName" maxlength="14" placeholder="Name" autocomplete="off"></label>
+          <div class="eyebrow">Where</div>
+          <div class="seg wrap" id="segVenue"><button aria-pressed="true" data-v="cafeteria">Cafeteria</button><button data-v="classroom">Classroom</button><button data-v="restroom">Restroom</button><button data-v="gym">Gym</button><button data-v="hallway">Hallway</button><button data-v="outside">Outside</button></div>
+          <div class="eyebrow">Land it</div>
+          <div class="seg" id="segStage"><button aria-pressed="true" data-v="table">On the table</button><button data-v="tray">On the tray</button><button data-v="books">On the books</button><button data-v="stool">Onto the stool</button></div>
+          <div class="eyebrow">First to</div>
+          <div class="seg" id="segGoal"><button data-v="2">2</button><button aria-pressed="true" data-v="3">3</button><button data-v="5">5</button></div>
+          <button class="toggle" id="togRoomRec" aria-pressed="true"><span class="dot"></span>Record this game as a tape</button>
+          <p class="note" id="roomNote">Up to 6 phones. Everyone takes turns; first to the target wins.</p>
+          <button class="btn btn-blue btn-wide" id="btnRoomCreate">Create the link</button>
+          <button class="btn btn-ghost btn-wide" id="btnRoomCancel">Cancel</button>
+        </div>
+      </div>
+
+      <div class="sheet" id="sheetLobby" hidden>
+        <div class="card">
+          <div class="ep" id="lobbyLabel">LOBBY</div>
+          <div class="code-big" id="lobbyCode">BRUH7</div>
+          <div class="link-box"><code id="lobbyLink"></code><button class="btn" id="btnCopy">Copy</button></div>
+          <p class="note">Send the link, or the code. Friends open this page and join.</p>
+          <ul class="plist" id="lobbyPlayers"></ul>
+          <p class="note" id="lobbyNote"></p>
+          <button class="btn btn-red btn-wide" id="btnLobbyStart" hidden>Start</button>
+          <button class="btn btn-ghost btn-wide" id="btnLobbyLeave">Leave</button>
+        </div>
+      </div>
+
+      <div class="sheet" id="sheetJoin" hidden>
+        <div class="card">
+          <div class="ep" id="joinLabel">JOIN</div>
+          <div class="vs" id="joinTitle">TABLE</div>
+          <p id="joinLine" class="note"></p>
+          <label id="joinNameWrap">Your name<input type="text" id="joinName" maxlength="14" placeholder="Name" autocomplete="off"></label>
+          <button class="btn btn-blue btn-wide" id="btnJoinGo">Join</button>
+          <button class="btn btn-yellow btn-wide" id="btnWatch" hidden>Watch</button>
+          <button class="btn btn-ghost btn-wide" id="btnJoinCancel">Back</button>
+        </div>
+      </div>
+    </div>
+    <div class="hint" id="hint">Swipe up to flip</div>
+  </section>
+
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
+<script>
+if (typeof Matter === 'undefined') { document.write('<script src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"><\/script>'); }
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="js/farts.js"></script>
+  if (!window.FIREBASE_CONFIG) return 'Play by link is not set up on this site yet: firebase-config.js is empty. Paste your Firebase web config into it and redeploy.';
+  if (c === 'unavailable' || c === 'deadline-exceeded') return 'Cannot reach the database. Check the connection, or that the projectId in firebase-config.js is right.';
+<script src="js/physics.js"></script>
+<script src="js/data.js"></script>
+<script src="js/render.js"></script>
+<script src="js/match.js"></script>
+<script src="js/net.js"></script>
+</body>
+</html>
