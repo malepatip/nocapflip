@@ -122,11 +122,12 @@ async function netJoin(code, name) {
 /* ----- live room ----- */
 function netEnter(code) {
   netLeave(false);
-  NET.code = code; NET.played = 0; NET.queue = []; NET.early = []; NET.mine = {}; NET.state = null; NET.sawLobby = false;
+  NET.code = code; keepAwake(); NET.played = 0; NET.queue = []; NET.early = []; NET.mine = {}; NET.state = null; NET.sawLobby = false;
   NET.unsub.push(roomRef(code).onSnapshot(onRoom, function (e) { toast('Lost the connection to the table. ' + dbErr(e)); }));
   NET.unsub.push(throwsRef(code).orderBy('seq').onSnapshot(onThrows, function (e) {}));
 }
 function netLeave(full) {
+  letSleep();
   clearInterval(NET.beat); NET.beat = null;
   NET.unsub.forEach(function (u) { try { u(); } catch (e) {} }); NET.unsub = [];
   if (full !== false && NET.state && NET.db && M && M.mode === 'link') {
@@ -139,16 +140,24 @@ function netLeave(full) {
   NET.code = ''; NET.state = null; NET.queue = []; NET.early = []; clearTimeout(NET.waitTimer); NET.waitTimer = null;
 }
 /* host heartbeat: if the host's phone disappears (tab closed, signal lost), guests end the game too */
+/* keep phones awake during a table, and say hello again the moment the host comes back to the page */
+var wakeLock = null;
+function keepAwake() { try { if (navigator.wakeLock && document.visibilityState === 'visible' && NET.code) navigator.wakeLock.request('screen').then(function (l) { wakeLock = l; }).catch(function () {}); } catch (e) {} }
+function letSleep() { try { if (wakeLock) wakeLock.release(); } catch (e) {} wakeLock = null; }
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState !== 'visible') return;
+  NET.hbAt = Date.now(); keepAwake();
+  var s = NET.state; if (NET.db && NET.host && s && (s.status === 'lobby' || s.status === 'playing')) roomRef(s.code).update({ hb: Date.now() }).catch(function () {});
+});
 function netBeat() {
   if (NET.beat) return; NET.hbAt = Date.now(); NET.hbV = NET.state && NET.state.hb;
   NET.beat = setInterval(function () {
     var s = NET.state; if (!s || !NET.db || (s.status !== 'lobby' && s.status !== 'playing')) { clearInterval(NET.beat); NET.beat = null; return; }
     if (NET.host) { roomRef(s.code).update({ hb: Date.now() }).catch(function () {}); return; }
     if (s.hb !== NET.hbV) { NET.hbV = s.hb; NET.hbAt = Date.now(); }
-    else if (s.hb && Date.now() - NET.hbAt > 45000) { toast('The host left, so the game ended.'); recStop(false); netLeave(false); M = null; show('home'); }
+    else if (s.hb && s.status === 'playing' && Date.now() - NET.hbAt > 120000) { toast('The host left, so the game ended.'); recStop(false); netLeave(false); M = null; show('home'); }
   }, 8000);
 }
-window.addEventListener('pagehide', function () { var s = NET.state; if (NET.db && NET.host && s && (s.status === 'lobby' || s.status === 'playing')) { try { roomRef(s.code).update({ status: 'closed' }); } catch (e) {} } });
 function onRoom(snap) {
   if (!snap.exists) { if (NET.state) { toast('The host left, so the game ended.'); recStop(false); netLeave(false); M = null; show('home'); } return; }
   var d = snap.data(), first = !NET.state; NET.state = d; NET.host = d.host === NET.uid;
@@ -237,11 +246,25 @@ function renderLobby(d, meIdx) {
 }
 $('btnLobbyStart').addEventListener('click', function () { var d = NET.state; if (!d) return; sfx('tap'); roomRef(d.code).update({ status: 'playing', turn: 0, pts: d.players.map(function () { return 0; }), seq: 0, started: iso() }).catch(noWrite); });
 $('btnLobbyLeave').addEventListener('click', function () { netLeave(); M = null; show('home'); });
-$('btnCopy').addEventListener('click', function () {
-  var link = $('lobbyLink').textContent, b = this;
-  var ok = function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 1500); };
-  var fallback = function () { try { var r = document.createRange(); r.selectNodeContents($('lobbyLink')); var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); b.textContent = 'Select & copy'; } catch (e) {} };
-  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(ok).catch(fallback); else fallback();
+function copyText(t) {
+  return new Promise(function (res, rej) {
+    function legacy() {
+      try { var ta = document.createElement('textarea'); ta.value = t; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px'; document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, t.length); var ok = document.execCommand('copy'); document.body.removeChild(ta); ok ? res() : rej(); } catch (e) { rej(e); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) navigator.clipboard.writeText(t).then(res).catch(legacy); else legacy();
+  });
+}
+function copyLobbyLink() {
+  var link = $('lobbyLink').textContent, b = $('btnCopy');
+  copyText(link).then(function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy link'; }, 1500); })
+    .catch(function () { try { window.prompt('Press and hold, select all, then copy:', link); } catch (e) {} });
+}
+$('btnCopy').addEventListener('click', copyLobbyLink);
+$('lobbyLink').addEventListener('click', copyLobbyLink);
+if (navigator.share) $('btnShare').hidden = false;
+$('btnShare').addEventListener('click', function () {
+  var link = $('lobbyLink').textContent, code = $('lobbyCode').textContent;
+  try { navigator.share({ title: 'No Cap', text: 'Join my No Cap table. Code ' + code + ':', url: link }).catch(function () {}); } catch (e) { copyLobbyLink(); }
 });
 
 /* ----- saving the video (downloads capability) ----- */

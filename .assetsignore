@@ -1,6 +1,7 @@
 wrangler.jsonc
 .assetsignore
 README.md
+CLAUDE.md
 firestore.rules
 .git
 node_modules
