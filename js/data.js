@@ -41,21 +41,37 @@ var AC = null, OUT = null, ADEST = null;
 function audio() {
   if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); OUT = AC.createGain(); OUT.gain.value = 1; OUT.connect(AC.destination); try { ADEST = AC.createMediaStreamDestination(); OUT.connect(ADEST); } catch (e) { ADEST = null; } fartPreload(); }
   if (AC.state === 'suspended') { try { AC.resume(); } catch (e) {} }
+  if (S.audio === 'clean') cleanPreload();
   return AC;
+}
+/* clean-mode recorded samples (nice + fail), decoded once and reused like the farts */
+var CLEAN_BUFS = { nice: null, fail: null }, CLEAN_FETCHED = {};
+function cleanLoad(key, url) {
+  if (CLEAN_BUFS[key] || CLEAN_FETCHED[key]) return; CLEAN_FETCHED[key] = true;
+  fetch(url).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (ab) {
+    if (!ab) return; try { var p = AC.decodeAudioData(ab, function (buf) { CLEAN_BUFS[key] = buf; }, function () {}); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+  }).catch(function () {});
+}
+function cleanPreload() { cleanLoad('nice', 'nice.m4a'); cleanLoad('fail', 'fail.m4a'); }
+function cleanPlay(key, rate) {
+  var buf = CLEAN_BUFS[key]; if (!buf) return false;
+  var src = AC.createBufferSource(); src.buffer = buf; if (rate) src.playbackRate.value = rate;
+  var g = AC.createGain(); g.gain.value = 1; src.connect(g); g.connect(OUT); src.start(AC.currentTime);
+  return true;
 }
 function sfx(kind) {
   if (!S.sound) return;
   try {
     audio();
     var t = AC.currentTime, clean = S.audio === 'clean';
-    if (kind === 'flop' || kind === 'thud') { if (clean) sadTrombone(t, false); else fartPlay(t); return; }
-    if (kind === 'lose') { if (clean) sadTrombone(t, true); else fartPlay(t, FART_LONG); return; }
+    if (kind === 'flop' || kind === 'thud') { if (clean) { if (!cleanPlay('fail')) sadTrombone(t, false); } else fartPlay(t); return; }
+    if (kind === 'lose') { if (clean) { if (!cleanPlay('fail', 0.9)) sadTrombone(t, true); } else fartPlay(t, FART_LONG); return; }
     var o = AC.createOscillator(), g = AC.createGain();
     o.connect(g); g.connect(OUT);
     if (kind === 'land') { o.type = 'triangle'; o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(880, t + .08); g.gain.setValueAtTime(.18, t); g.gain.exponentialRampToValueAtTime(.001, t + .35); o.start(t); o.stop(t + .36); }
     else if (kind === 'cap') { [523, 659, 784, 1046].forEach(function (f, i) { var o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'square'; o2.frequency.value = f; o2.connect(g2); g2.connect(OUT); g2.gain.setValueAtTime(.08, t + i * .09); g2.gain.exponentialRampToValueAtTime(.001, t + i * .09 + .3); o2.start(t + i * .09); o2.stop(t + i * .09 + .32); }); o.frequency.value = 1; g.gain.value = 0; o.start(t); o.stop(t + .01); }
     else if (kind === 'tap') { o.type = 'sine'; o.frequency.value = 700; g.gain.setValueAtTime(.06, t); g.gain.exponentialRampToValueAtTime(.001, t + .08); o.start(t); o.stop(t + .09); }
-    else if (kind === 'win') { [392, 523, 659, 784].forEach(function (f, i) { var o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'triangle'; o2.frequency.value = f; o2.connect(g2); g2.connect(OUT); g2.gain.setValueAtTime(.12, t + i * .12); g2.gain.exponentialRampToValueAtTime(.001, t + i * .12 + .4); o2.start(t + i * .12); o2.stop(t + i * .12 + .42); }); o.frequency.value = 1; g.gain.value = 0; o.start(t); o.stop(t + .01); if (clean) niceVoice(); }
+    else if (kind === 'win') { [392, 523, 659, 784].forEach(function (f, i) { var o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'triangle'; o2.frequency.value = f; o2.connect(g2); g2.connect(OUT); g2.gain.setValueAtTime(.12, t + i * .12); g2.gain.exponentialRampToValueAtTime(.001, t + i * .12 + .4); o2.start(t + i * .12); o2.stop(t + i * .12 + .42); }); o.frequency.value = 1; g.gain.value = 0; o.start(t); o.stop(t + .01); if (clean) { if (!cleanPlay('nice')) niceVoice(); } }
   } catch (e) {}
 }
 /* clean-mode sounds: classic sad-trombone wah-wah on fail, speechSynthesis "nice!" on win */
