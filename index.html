@@ -140,8 +140,8 @@ p { margin: 0; max-width: 34em; }
 .hint b { color: var(--ink); }
 
 /* cards over the stage (episode title, end card, 2P setup) */
-.sheet { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(30, 42, 35, .55); }
-.sheet .card { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 12px; box-shadow: 6px 6px 0 var(--ink); }
+.sheet { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 16px; background: rgba(30, 42, 35, .55); overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.sheet .card { width: 100%; max-width: 360px; margin: auto; display: flex; flex-direction: column; gap: 12px; box-shadow: 6px 6px 0 var(--ink); }
 .ep { font-family: var(--display); font-size: 14px; letter-spacing: .14em; color: var(--red); }
 .vs { font-family: var(--display); font-size: 40px; line-height: 1; }
 .count { font-family: var(--display); font-size: 96px; line-height: 1; color: var(--yellow); -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; text-shadow: 6px 6px 0 var(--ink); }
