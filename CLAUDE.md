@@ -30,9 +30,9 @@ GitHub `malepatip/nocapflip` -> Cloudflare Workers Builds (static assets). `wran
 - The last video stays in `REC.blob` until the next recording finishes; `recStart` must not discard it. End-screen buttons ask before moving on with an unsaved video.
 - `firestore.rules` deploys via `firebase deploy --only firestore:rules` (project `nocapflip-64f0a`); the Cloudflare push does not touch it (and `.assetsignore` keeps it out of the bundle).
 - Firestore writes need an authenticated Firebase user: `net.js` calls `firebase.auth().signInAnonymously()` on load; rooms carry a `playerIds` array mirroring `players[].id` so rules can check `request.auth.uid in playerIds` or `== host`.
+- The browser API key is locked in Google Cloud to referrers `https://nocapflip.com/*` and `https://www.nocapflip.com/*`, and to four APIs (`firestore`, `identitytoolkit`, `securetoken`, `firebaseinstallations`); adding Analytics, FCM, Storage, Hosting, etc. will need the service added to that allowlist.
 - Do not put JS lines mentioning "firebase-config.js" into index.html by scripted filtering (it once leaked raw code onto the page).
 
 ## Open items
-- Verify the live site has the latest net.js and index.html (fixes for host rejoin, copy/share, no pagehide close); test two real phones with a fresh table.
-- Owner to restrict the Firebase browser key in Google Cloud (HTTP referrers nocapflip.com, plus Cloud Firestore API only) and dismiss the GitHub secret-scanning alert (public web key, by design).
+- Test two real phones with a fresh table (now that anonymous auth is on and the browser API key is locked to nocapflip.com).
 - Ideas offered: 1200x630 social preview image; more venues (bus, science lab, locker room, main office); per-turn shot clock.
