@@ -30,7 +30,7 @@ var AURA = { land: 100, cap: 1000, flop: -25, win: 500, lose: -200, wrong: -25 }
 
 /* ---------- persistence (per-browser convenience only) ---------- */
 var SAVE_KEY = 'nocap.v1';
-var S = { aura: 0, beaten: [], bottles: ['tap'], active: 'tap', stats: { flips: 0, lands: 0, caps: 0, best: 0, streak: 0 }, clip: false, sound: true, rec: true, clock: true, name: '', pid: '' };
+var S = { aura: 0, beaten: [], bottles: ['tap'], active: 'tap', stats: { flips: 0, lands: 0, caps: 0, best: 0, streak: 0 }, clip: false, sound: true, rec: true, clock: true, audio: 'fart', name: '', pid: '' };
 function load() { try { var raw = localStorage.getItem(SAVE_KEY); if (raw) { var o = JSON.parse(raw); if (o && typeof o === 'object') { S = Object.assign(S, o); S.stats = Object.assign({ flips: 0, lands: 0, caps: 0, best: 0, streak: 0 }, o.stats || {}); } } } catch (e) {} }
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} }
 function rankFor(a) { var r = RANKS[0][1]; RANKS.forEach(function (x) { if (a >= x[0]) r = x[1]; }); return r; }
@@ -47,15 +47,39 @@ function sfx(kind) {
   if (!S.sound) return;
   try {
     audio();
-    var t = AC.currentTime;
-    if (kind === 'flop' || kind === 'thud') { fartPlay(t); return; }
-    if (kind === 'lose') { fartPlay(t, FART_LONG); return; }
+    var t = AC.currentTime, clean = S.audio === 'clean';
+    if (kind === 'flop' || kind === 'thud') { if (clean) sadTrombone(t, false); else fartPlay(t); return; }
+    if (kind === 'lose') { if (clean) sadTrombone(t, true); else fartPlay(t, FART_LONG); return; }
     var o = AC.createOscillator(), g = AC.createGain();
     o.connect(g); g.connect(OUT);
     if (kind === 'land') { o.type = 'triangle'; o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(880, t + .08); g.gain.setValueAtTime(.18, t); g.gain.exponentialRampToValueAtTime(.001, t + .35); o.start(t); o.stop(t + .36); }
     else if (kind === 'cap') { [523, 659, 784, 1046].forEach(function (f, i) { var o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'square'; o2.frequency.value = f; o2.connect(g2); g2.connect(OUT); g2.gain.setValueAtTime(.08, t + i * .09); g2.gain.exponentialRampToValueAtTime(.001, t + i * .09 + .3); o2.start(t + i * .09); o2.stop(t + i * .09 + .32); }); o.frequency.value = 1; g.gain.value = 0; o.start(t); o.stop(t + .01); }
     else if (kind === 'tap') { o.type = 'sine'; o.frequency.value = 700; g.gain.setValueAtTime(.06, t); g.gain.exponentialRampToValueAtTime(.001, t + .08); o.start(t); o.stop(t + .09); }
-    else if (kind === 'win') { [392, 523, 659, 784].forEach(function (f, i) { var o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'triangle'; o2.frequency.value = f; o2.connect(g2); g2.connect(OUT); g2.gain.setValueAtTime(.12, t + i * .12); g2.gain.exponentialRampToValueAtTime(.001, t + i * .12 + .4); o2.start(t + i * .12); o2.stop(t + i * .12 + .42); }); o.frequency.value = 1; g.gain.value = 0; o.start(t); o.stop(t + .01); }
+    else if (kind === 'win') { [392, 523, 659, 784].forEach(function (f, i) { var o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'triangle'; o2.frequency.value = f; o2.connect(g2); g2.connect(OUT); g2.gain.setValueAtTime(.12, t + i * .12); g2.gain.exponentialRampToValueAtTime(.001, t + i * .12 + .4); o2.start(t + i * .12); o2.stop(t + i * .12 + .42); }); o.frequency.value = 1; g.gain.value = 0; o.start(t); o.stop(t + .01); if (clean) niceVoice(); }
+  } catch (e) {}
+}
+/* clean-mode sounds: classic sad-trombone wah-wah on fail, speechSynthesis "nice!" on win */
+function sadTrombone(t, long) {
+  var notes = long ? [392, 349, 311, 277, 247, 220, 196, 175] : [392, 349, 311, 247];
+  var step = long ? 0.18 : 0.15;
+  notes.forEach(function (f, i) {
+    var o = AC.createOscillator(), g = AC.createGain(), lp = AC.createBiquadFilter();
+    o.type = 'sawtooth'; lp.type = 'lowpass'; lp.frequency.value = 1400; lp.Q.value = 0.9;
+    var tt = t + i * step;
+    o.frequency.setValueAtTime(f, tt);
+    o.frequency.exponentialRampToValueAtTime(f * 0.9, tt + step * 0.95);
+    g.gain.setValueAtTime(0, tt);
+    g.gain.linearRampToValueAtTime(0.14, tt + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, tt + step * 1.1);
+    o.connect(lp); lp.connect(g); g.connect(OUT);
+    o.start(tt); o.stop(tt + step * 1.2);
+  });
+}
+function niceVoice() {
+  try {
+    if (!window.speechSynthesis) return;
+    var u = new SpeechSynthesisUtterance('nice'); u.rate = 1.05; u.pitch = 1.25; u.volume = 0.9;
+    window.speechSynthesis.speak(u);
   } catch (e) {}
 }
 

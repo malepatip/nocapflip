@@ -7,7 +7,7 @@ function renderHome() {
   var st = S.stats, pct = st.flips ? Math.round(100 * st.lands / st.flips) : 0;
   $('homeStats').innerHTML = '<span><strong class="num">' + fmt(S.aura) + '</strong> aura · ' + rankFor(S.aura) + '</span><span><strong class="num">' + st.lands + '</strong> lands in <strong class="num">' + st.flips + '</strong> flips (' + pct + '%)</span><span><strong class="num">' + st.caps + '</strong> cap lands</span><span>best streak <strong class="num">' + st.best + '</strong></span><span><strong class="num">' + S.beaten.length + '</strong>/' + KIDS.length + ' kids beaten</span>';
   $('lastVideo').hidden = !REC.blob;
-  $('togClip').setAttribute('aria-pressed', String(!!S.clip)); $('togSound').setAttribute('aria-pressed', String(!!S.sound)); $('togRec').setAttribute('aria-pressed', String(!!S.rec)); $('togClock').setAttribute('aria-pressed', String(!!S.clock));
+  $('togClip').setAttribute('aria-pressed', String(!!S.clip)); $('togSound').setAttribute('aria-pressed', String(!!S.sound)); $('togRec').setAttribute('aria-pressed', String(!!S.rec)); $('togClock').setAttribute('aria-pressed', String(!!S.clock)); $('togAudio').setAttribute('aria-pressed', String(S.audio === 'clean'));
 }
 function nextKid() { for (var i = 0; i < KIDS.length; i++) if (S.beaten.indexOf(KIDS[i].id) < 0) return i; return -1; }
 function renderTable() {
@@ -231,6 +231,7 @@ $('togClip').addEventListener('click', function () { S.clip = !S.clip; save(); r
 $('togSound').addEventListener('click', function () { S.sound = !S.sound; save(); renderHome(); if (S.sound) sfx('tap'); });
 $('togRec').addEventListener('click', function () { S.rec = !S.rec; save(); renderHome(); });
 $('togClock').addEventListener('click', function () { S.clock = !S.clock; save(); renderHome(); if (M && !M.code) M.clock = S.clock; });
+$('togAudio').addEventListener('click', function () { S.audio = S.audio === 'clean' ? 'fart' : 'clean'; save(); renderHome(); });
 var resetArmed = false;
 $('btnReset').addEventListener('click', function () { if (!resetArmed) { resetArmed = true; $('btnReset').textContent = 'Tap again to wipe aura, bottles and the seating chart'; setTimeout(function () { resetArmed = false; $('btnReset').textContent = 'Reset progress'; }, 3000); return; }
-  resetArmed = false; S = { aura: 0, beaten: [], bottles: ['tap'], active: 'tap', stats: { flips: 0, lands: 0, caps: 0, best: 0, streak: 0 }, clip: S.clip, sound: S.sound, rec: S.rec, clock: S.clock, name: S.name, pid: S.pid }; save(); $('btnReset').textContent = 'Reset progress'; renderTable(); });
+  resetArmed = false; S = { aura: 0, beaten: [], bottles: ['tap'], active: 'tap', stats: { flips: 0, lands: 0, caps: 0, best: 0, streak: 0 }, clip: S.clip, sound: S.sound, rec: S.rec, clock: S.clock, audio: S.audio, name: S.name, pid: S.pid }; save(); $('btnReset').textContent = 'Reset progress'; renderTable(); });
