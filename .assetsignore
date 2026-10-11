@@ -11,3 +11,4 @@ firebase.json
 .firebase
 firebase-debug.log
 recorder
+uploader

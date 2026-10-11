@@ -3,3 +3,5 @@ node_modules
 firebase-debug.log
 package-lock.json
 .env
+client-secret*.json
+*token*.json
