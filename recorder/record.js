@@ -237,19 +237,27 @@ async function playOne({ apiKey, url, outDir }) {
   const url = process.env.NOCAP_URL || 'https://nocapflip.com';
   const outDir = process.env.OUT_DIR || '/sdcard/Download';
   const n = parseInt(process.env.N || process.argv[2] || '1', 10);
-  let saved = 0;
-  for (let i = 0; i < n; i++) {
-    console.log(`\n=== game ${i+1} / ${n} ===`);
-    try { await playOne({ apiKey, url, outDir }); saved++; }
-    catch (e) {
-      const msg = (e && (e.message || String(e))) || '';
-      const quota = (e && e.status === 402) || /402|limit reached|browser minutes/i.test(msg);
-      if (quota) {
-        console.error(`[stop] Browserbase quota exceeded after ${saved} game(s). Remaining ${n - i} skipped. Upgrade at https://browserbase.com/plans`);
-        break;
+  const concurrency = Math.max(1, Math.min(3, parseInt(process.env.CONCURRENCY || '3', 10)));
+  const isQuota = (e) => {
+    const msg = (e && (e.message || String(e))) || '';
+    return (e && e.status === 402) || /402|limit reached|browser minutes/i.test(msg);
+  };
+
+  let next = 0, saved = 0, stopped = false;
+  async function worker(id) {
+    while (!stopped) {
+      const i = next++; if (i >= n) return;
+      console.log(`\n=== game ${i+1} / ${n} [w${id}] ===`);
+      try { await playOne({ apiKey, url, outDir }); saved++; }
+      catch (e) {
+        if (isQuota(e)) {
+          if (!stopped) { stopped = true; console.error(`[stop] Browserbase quota exceeded after ${saved} game(s). Remaining ${Math.max(0, n - i - 1)} not attempted. Upgrade at https://browserbase.com/plans`); }
+          return;
+        }
+        console.error(`[game ${i+1}] failed:`, e && e.stack || e);
       }
-      console.error('[game] failed:', e && e.stack || e);
     }
   }
-  console.log(`\n[done] saved ${saved} game(s) of ${n} requested`);
+  await Promise.all(Array.from({ length: Math.min(concurrency, n) }, (_, k) => worker(k + 1)));
+  console.log(`\n[done] saved ${saved} game(s) of ${n} requested (concurrency=${concurrency})`);
 })();
