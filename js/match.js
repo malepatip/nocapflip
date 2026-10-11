@@ -7,7 +7,7 @@ function renderHome() {
   var st = S.stats, pct = st.flips ? Math.round(100 * st.lands / st.flips) : 0;
   $('homeStats').innerHTML = '<span><strong class="num">' + fmt(S.aura) + '</strong> aura · ' + rankFor(S.aura) + '</span><span><strong class="num">' + st.lands + '</strong> lands in <strong class="num">' + st.flips + '</strong> flips (' + pct + '%)</span><span><strong class="num">' + st.caps + '</strong> cap lands</span><span>best streak <strong class="num">' + st.best + '</strong></span><span><strong class="num">' + S.beaten.length + '</strong>/' + KIDS.length + ' kids beaten</span>';
   $('lastVideo').hidden = !REC.blob;
-  $('togClip').setAttribute('aria-pressed', String(!!S.clip)); $('togSound').setAttribute('aria-pressed', String(!!S.sound)); $('togRec').setAttribute('aria-pressed', String(!!S.rec));
+  $('togClip').setAttribute('aria-pressed', String(!!S.clip)); $('togSound').setAttribute('aria-pressed', String(!!S.sound)); $('togRec').setAttribute('aria-pressed', String(!!S.rec)); $('togClock').setAttribute('aria-pressed', String(!!S.clock));
 }
 function nextKid() { for (var i = 0; i < KIDS.length; i++) if (S.beaten.indexOf(KIDS[i].id) < 0) return i; return -1; }
 function renderTable() {
@@ -40,7 +40,7 @@ function openMatch(o) {
   var kid = o.kid || null, idx = kid ? KIDS.indexOf(kid) : -1;
   var players = o.players || (kid ? [{ id: 'me', name: 'You', skin: S.active }, { id: 'kid:' + kid.id, name: kid.name, skin: kid.skin }] : null);
   M = { id: Date.now() + Math.random(), mode: o.mode, kid: kid, stageId: o.stageId || (kid ? kid.stage : 'table'), venue: o.venue || (kid && kid.venue) || 'cafeteria', goal: o.goal || (kid ? kid.goal : 3), players: players, pts: players.map(function () { return 0; }),
-    turn: o.turn || 0, me: typeof o.me === 'number' ? o.me : 0, flips: 0, lands: 0, caps: 0, auraStart: S.aura, ep: idx + 1, code: o.code || '', record: o.record !== false, host: !!o.host, seq: 0, busy: false, done: false, createdAt: new Date().toISOString() };
+    turn: o.turn || 0, me: typeof o.me === 'number' ? o.me : 0, flips: 0, lands: 0, caps: 0, auraStart: S.aura, ep: idx + 1, code: o.code || '', record: o.record !== false, clock: o.mode === 'tape' ? false : (o.clock === undefined ? !!S.clock : !!o.clock), host: !!o.host, seq: 0, busy: false, done: false, createdAt: new Date().toISOString() };
   R.stageId = M.stageId; R.venue = M.venue; R.pose = null; R.state = 'idle'; R.skin = players[M.turn].skin; R.aim = null; inputEnabled = false; R.lastHuman = null;
   $('match').classList.toggle('clip-on', !!S.clip);
   var title = M.mode === 'ladder' ? 'EP ' + M.ep + ' · vs ' + kid.name.toUpperCase() : M.mode === 'tape' ? 'TAPE · ' + M.code : (M.mode === 'link' ? M.code + ' · ' : '2P · ') + players.map(function (p) { return p.name.toUpperCase(); }).join(' vs ');
@@ -90,11 +90,11 @@ function myTurn() { return M.mode === 'two' || (M.mode === 'ladder' && M.turn ==
 var CLOCK_MS = 20000, clockTimer = null, clockDeadline = 0;
 function clockStop() { if (clockTimer) { clearInterval(clockTimer); clockTimer = null; } var el = $('shotClock'); if (el) { el.hidden = true; el.classList.remove('low'); } }
 function clockStart() {
-  clockStop(); if (!M || M.done || M.mode === 'tape' || isAI() || !myTurn()) return;
+  clockStop(); if (!M || M.done || !M.clock || isAI() || !myTurn()) return;
   clockDeadline = Date.now() + CLOCK_MS;
   var el = $('shotClock'), n = $('shotClockN'); if (!el || !n) return; el.hidden = false;
   var id = M.id, tick = function () {
-    if (!M || M.id !== id || M.done || !myTurn() || isAI()) { clockStop(); return; }
+    if (!M || M.id !== id || M.done || !M.clock || !myTurn() || isAI()) { clockStop(); return; }
     var left = Math.max(0, clockDeadline - Date.now()); n.textContent = Math.ceil(left / 1000); el.classList.toggle('low', left <= 5000);
     if (left <= 0) { clockStop(); shotClockExpired(); }
   };
@@ -230,6 +230,7 @@ $('btnHome1').addEventListener('click', function () { show('home'); });
 $('togClip').addEventListener('click', function () { S.clip = !S.clip; save(); renderHome(); });
 $('togSound').addEventListener('click', function () { S.sound = !S.sound; save(); renderHome(); if (S.sound) sfx('tap'); });
 $('togRec').addEventListener('click', function () { S.rec = !S.rec; save(); renderHome(); });
+$('togClock').addEventListener('click', function () { S.clock = !S.clock; save(); renderHome(); if (M && !M.code) M.clock = S.clock; });
 var resetArmed = false;
 $('btnReset').addEventListener('click', function () { if (!resetArmed) { resetArmed = true; $('btnReset').textContent = 'Tap again to wipe aura, bottles and the seating chart'; setTimeout(function () { resetArmed = false; $('btnReset').textContent = 'Reset progress'; }, 3000); return; }
-  resetArmed = false; S = { aura: 0, beaten: [], bottles: ['tap'], active: 'tap', stats: { flips: 0, lands: 0, caps: 0, best: 0, streak: 0 }, clip: S.clip, sound: S.sound, rec: S.rec, name: S.name, pid: S.pid }; save(); $('btnReset').textContent = 'Reset progress'; renderTable(); });
+  resetArmed = false; S = { aura: 0, beaten: [], bottles: ['tap'], active: 'tap', stats: { flips: 0, lands: 0, caps: 0, best: 0, streak: 0 }, clip: S.clip, sound: S.sound, rec: S.rec, clock: S.clock, name: S.name, pid: S.pid }; save(); $('btnReset').textContent = 'Reset progress'; renderTable(); });

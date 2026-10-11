@@ -30,7 +30,7 @@ var AURA = { land: 100, cap: 1000, flop: -25, win: 500, lose: -200, wrong: -25 }
 
 /* ---------- persistence (per-browser convenience only) ---------- */
 var SAVE_KEY = 'nocap.v1';
-var S = { aura: 0, beaten: [], bottles: ['tap'], active: 'tap', stats: { flips: 0, lands: 0, caps: 0, best: 0, streak: 0 }, clip: false, sound: true, rec: true, name: '', pid: '' };
+var S = { aura: 0, beaten: [], bottles: ['tap'], active: 'tap', stats: { flips: 0, lands: 0, caps: 0, best: 0, streak: 0 }, clip: false, sound: true, rec: true, clock: true, name: '', pid: '' };
 function load() { try { var raw = localStorage.getItem(SAVE_KEY); if (raw) { var o = JSON.parse(raw); if (o && typeof o === 'object') { S = Object.assign(S, o); S.stats = Object.assign({ flips: 0, lands: 0, caps: 0, best: 0, streak: 0 }, o.stats || {}); } } } catch (e) {} }
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} }
 function rankFor(a) { var r = RANKS[0][1]; RANKS.forEach(function (x) { if (a >= x[0]) r = x[1]; }); return r; }

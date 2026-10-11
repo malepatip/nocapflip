@@ -214,6 +214,7 @@ label { font-size: 13px; font-weight: 700; color: var(--ink-2); display: flex; f
         <button class="toggle" id="togClip" aria-pressed="false"><span class="dot"></span>Clip mode</button>
         <button class="toggle" id="togSound" aria-pressed="true"><span class="dot"></span>Sound</button>
         <button class="toggle" id="togRec" aria-pressed="true"><span class="dot"></span>Record my games</button>
+        <button class="toggle" id="togClock" aria-pressed="true"><span class="dot"></span>20s shot clock</button>
       </div>
       <p class="note">Every game is recorded by default, two ways. A <b>video</b> of the table (1080×1920 vertical, with sound, ready for Shorts) records on this device while you play; a red REC timer shows it running, and the end card has a Save button. A <b>tape</b> (every flip, replayable) is saved to the shared shelf below so anyone with the link can watch it back. Clip mode adds the countdown and hides the buttons for screen recordings.</p>
       <div class="row" id="lastVideo" hidden><button class="btn btn-yellow" id="btnSaveHome">Save last video</button><span class="note" id="videoNote"></span></div>
@@ -318,6 +319,7 @@ label { font-size: 13px; font-weight: 700; color: var(--ink-2); display: flex; f
           <div class="eyebrow">First to</div>
           <div class="seg" id="segGoal"><button data-v="2">2</button><button aria-pressed="true" data-v="3">3</button><button data-v="5">5</button></div>
           <button class="toggle" id="togRoomRec" aria-pressed="true"><span class="dot"></span>Record this game as a tape</button>
+          <button class="toggle" id="togRoomClock" aria-pressed="true"><span class="dot"></span>20s shot clock</button>
           <p class="note" id="roomNote">Up to 6 phones. Everyone takes turns; first to the target wins.</p>
           <button class="btn btn-blue btn-wide" id="btnRoomCreate">Create the link</button>
           <button class="btn btn-ghost btn-wide" id="btnRoomCancel">Cancel</button>

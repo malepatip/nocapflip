@@ -71,13 +71,14 @@ function renderLinkNote() {
 }
 
 /* ----- host: make a table ----- */
-var roomOpts = { venue: 'cafeteria', stage: 'table', goal: 3, record: true };
+var roomOpts = { venue: 'cafeteria', stage: 'table', goal: 3, record: true, clock: true };
 ['segVenue', 'segStage', 'segGoal'].forEach(function (id) { $(id).addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; Array.prototype.forEach.call($(id).children, function (x) { x.setAttribute('aria-pressed', 'false'); }); b.setAttribute('aria-pressed', 'true'); if (id === 'segStage') roomOpts.stage = b.dataset.v; else if (id === 'segVenue') roomOpts.venue = b.dataset.v; else roomOpts.goal = +b.dataset.v; sfx('tap'); }); });
 $('togRoomRec').addEventListener('click', function () { roomOpts.record = !roomOpts.record; this.setAttribute('aria-pressed', String(roomOpts.record)); });
+$('togRoomClock').addEventListener('click', function () { roomOpts.clock = !roomOpts.clock; this.setAttribute('aria-pressed', String(roomOpts.clock)); });
 $('btnLink').addEventListener('click', function () {
   sfx('tap'); if (!NET.db) { toast(setupMsg()); return; }
   $('hostName').value = S.name || '';
-  openMatch({ mode: 'link', players: [{ id: NET.uid, name: S.name || 'You', skin: S.active }], stageId: roomOpts.stage, venue: roomOpts.venue, goal: roomOpts.goal, me: 0, host: true });
+  openMatch({ mode: 'link', players: [{ id: NET.uid, name: S.name || 'You', skin: S.active }], stageId: roomOpts.stage, venue: roomOpts.venue, goal: roomOpts.goal, clock: roomOpts.clock, me: 0, host: true });
   hideSheets(); $('sheetRoom').hidden = false;
 });
 $('btnRoomCancel').addEventListener('click', function () { M = null; show('home'); });
@@ -85,7 +86,7 @@ $('btnRoomCreate').addEventListener('click', async function () {
   var name = $('hostName').value.trim() || 'Host'; S.name = name; save(); this.disabled = true;
   try {
     var code = newCode();
-    await roomRef(code).set({ code: code, host: NET.uid, created: iso(), status: 'lobby', mode: 'link', stage: roomOpts.stage, venue: roomOpts.venue, goal: roomOpts.goal, record: roomOpts.record, players: [{ id: NET.uid, name: name, skin: S.active }], playerIds: [NET.uid], pts: [0], turn: 0, seq: 0, winner: -1, next: '' });
+    await roomRef(code).set({ code: code, host: NET.uid, created: iso(), status: 'lobby', mode: 'link', stage: roomOpts.stage, venue: roomOpts.venue, goal: roomOpts.goal, record: roomOpts.record, clock: roomOpts.clock, players: [{ id: NET.uid, name: name, skin: S.active }], playerIds: [NET.uid], pts: [0], turn: 0, seq: 0, winner: -1, next: '' });
     netEnter(code);
   } catch (e) { noWrite(e); toast('Could not make the table. ' + dbErr(e)); }
   this.disabled = false;
@@ -103,7 +104,7 @@ async function openCode(code) {
   if (d.status === 'done') { tapeOpen(code, d); return; }
   if (d.status === 'closed') { toast('That table was closed by the host.'); return; }
   var meIdx = d.players.findIndex(function (p) { return p.id === NET.uid; });
-  openMatch({ mode: 'link', players: d.players, stageId: d.stage, venue: d.venue, goal: d.goal, code: code, record: d.record, host: d.host === NET.uid, me: meIdx });
+  openMatch({ mode: 'link', players: d.players, stageId: d.stage, venue: d.venue, goal: d.goal, code: code, record: d.record, clock: d.clock !== false, host: d.host === NET.uid, me: meIdx });
   hideSheets(); $('sheetJoin').hidden = false;
   $('joinLabel').textContent = 'TABLE ' + code + ' · ' + STAGE_WORDS[d.stage] + ' · first to ' + d.goal;
   $('joinTitle').textContent = d.players.map(function (p) { return p.name.toUpperCase(); }).join(' vs ');
@@ -179,7 +180,7 @@ function onRoom(snap) {
   if (d.next && meIdx >= 0 && !NET.host) { var nm = d.players[meIdx].name; netLeave(false); netJoin(d.next, nm); return; }
   if (d.status === 'closed') { toast('The host left, so the game ended.'); recStop(false); netLeave(false); M = null; show('home'); return; }
   if (d.status === 'lobby') { NET.sawLobby = true; renderLobby(d, meIdx); return; }
-  if (!M || M.mode !== 'link' || M.code !== d.code) openMatch({ mode: 'link', players: d.players, stageId: d.stage, venue: d.venue, goal: d.goal, code: d.code, record: d.record, host: NET.host, me: meIdx, turn: d.turn });
+  if (!M || M.mode !== 'link' || M.code !== d.code) openMatch({ mode: 'link', players: d.players, stageId: d.stage, venue: d.venue, goal: d.goal, code: d.code, record: d.record, clock: d.clock !== false, host: NET.host, me: meIdx, turn: d.turn });
   M.me = meIdx; M.host = NET.host; M.players = d.players;
   if (first && !NET.sawLobby) { NET.played = d.seq; M.seq = d.seq; M.pts = d.pts.slice(); }
   if (!M.started) { M.started = true; hideSheets(); $('roomTag').hidden = false; $('roomTag').textContent = d.code; matchIntro(); NET.early.forEach(function (t) { if (t.seq > NET.played && !NET.mine[t.seq]) NET.queue.push(t); }); NET.early = []; NET.queue.sort(function (a, b) { return a.seq - b.seq; }); }
@@ -243,17 +244,17 @@ async function netRematch() {
   var d = NET.state; if (!d || !NET.host) return;
   try {
     var code = newCode(), me = d.players.find(function (p) { return p.id === NET.uid; }) || { id: NET.uid, name: S.name || 'Host', skin: S.active };
-    await roomRef(code).set({ code: code, host: NET.uid, created: iso(), status: 'lobby', mode: 'link', stage: d.stage, venue: d.venue || 'cafeteria', goal: d.goal, record: d.record, players: [me], playerIds: [NET.uid], pts: [0], turn: 0, seq: 0, winner: -1, next: '' });
+    await roomRef(code).set({ code: code, host: NET.uid, created: iso(), status: 'lobby', mode: 'link', stage: d.stage, venue: d.venue || 'cafeteria', goal: d.goal, record: d.record, clock: d.clock !== false, players: [me], playerIds: [NET.uid], pts: [0], turn: 0, seq: 0, winner: -1, next: '' });
     await roomRef(d.code).update({ next: code });
     netEnter(code);
   } catch (e) { noWrite(e); }
 }
 function renderLobby(d, meIdx) {
-  if (!M || M.code !== d.code) openMatch({ mode: 'link', players: d.players, stageId: d.stage, venue: d.venue, goal: d.goal, code: d.code, record: d.record, host: NET.host, me: meIdx });
+  if (!M || M.code !== d.code) openMatch({ mode: 'link', players: d.players, stageId: d.stage, venue: d.venue, goal: d.goal, code: d.code, record: d.record, clock: d.clock !== false, host: NET.host, me: meIdx });
   M.players = d.players; M.pts = d.players.map(function () { return 0; }); M.me = meIdx; M.host = NET.host; M.started = false; updateHud();
   hideSheets(); $('sheetLobby').hidden = false;
   $('lobbyCode').textContent = d.code; $('lobbyLink').textContent = ART_URL + '#' + d.code;
-  $('lobbyLabel').textContent = 'LOBBY · ' + STAGE_WORDS[d.stage] + ' · first to ' + d.goal + (d.record ? ' · taped' : ' · not taped');
+  $('lobbyLabel').textContent = 'LOBBY · ' + STAGE_WORDS[d.stage] + ' · first to ' + d.goal + (d.record ? ' · taped' : ' · not taped') + (d.clock === false ? '' : ' · 20s clock');
   var ul = $('lobbyPlayers'); ul.innerHTML = '';
   d.players.forEach(function (p) { var li = document.createElement('li'), a = document.createElement('span'), b = document.createElement('span'); a.textContent = p.name + (p.id === d.host ? ' · host' : '') + (p.id === NET.uid ? ' (you)' : ''); b.textContent = SKINS[p.skin] ? SKINS[p.skin].name : ''; li.appendChild(a); li.appendChild(b); ul.appendChild(li); });
   var hostName = (d.players.find(function (p) { return p.id === d.host; }) || {}).name || 'the host';
