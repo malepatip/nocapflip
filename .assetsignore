@@ -5,3 +5,7 @@ CLAUDE.md
 firestore.rules
 .git
 node_modules
+firebase.json
+.firebaserc
+.firebase
+firebase-debug.log

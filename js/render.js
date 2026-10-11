@@ -317,7 +317,8 @@ function drawSlate() {
 }
 
 /* ---------- video recording of the stage (canvas + game audio) ---------- */
-var REC = { rec: null, chunks: [], blob: null, mime: '', start: 0, timer: null, name: '', secs: 0, saveQueued: false };
+/* blob, name, mime and secs describe the last finished video; it stays until the next recording finishes, so starting a game never throws it away */
+var REC = { rec: null, chunks: [], blob: null, mime: '', start: 0, timer: null, name: '', secs: 0, saveQueued: false, saved: true };
 function recSupported() { return !!(window.MediaRecorder && cv.captureStream); }
 function recMime() {
   var safari = /apple/i.test(navigator.vendor || '') && !/crios|fxios|edgios/i.test(navigator.userAgent);
@@ -327,16 +328,16 @@ function recMime() {
   return '';
 }
 function recStart(name) {
-  recStop(true);
+  recStop(false); /* a recording still running (the end card) is kept, not thrown away */
   if (!recSupported() || !S.rec) return false;
   try {
     var stream = cv.captureStream(30);
     try { if (S.sound) { audio(); if (ADEST) ADEST.stream.getAudioTracks().forEach(function (tr) { stream.addTrack(tr); }); } } catch (e) {}
     var mime = recMime(); if (!mime) return false;
     var rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 5000000 });
-    REC.rec = rec; REC.chunks = []; REC.blob = null; REC.mime = mime; REC.name = name; REC.start = Date.now(); REC.secs = 0;
-    rec.ondataavailable = function (e) { if (e.data && e.data.size) REC.chunks.push(e.data); };
-    rec.onstop = function () { REC.blob = REC.chunks.length ? new Blob(REC.chunks, { type: mime.split(';')[0] }) : null; REC.secs = Math.round((Date.now() - REC.start) / 1000); REC.rec = null; if (typeof recDone === 'function') recDone(); };
+    var chunks = []; REC.rec = rec; REC.chunks = chunks; REC.start = Date.now();
+    rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = function () { var got = chunks.length > 0; if (got) { REC.blob = new Blob(chunks, { type: mime.split(';')[0] }); REC.mime = mime; REC.name = name; REC.secs = Math.round((Date.now() - REC.start) / 1000); REC.saved = false; } if (REC.rec === rec) REC.rec = null; if (typeof recDone === 'function') recDone(got); };
     rec.start(1000);
     $('recBadge').hidden = false; $('recTime').textContent = '0:00';
     clearInterval(REC.timer); REC.timer = setInterval(function () { var t = Math.round((Date.now() - REC.start) / 1000); $('recTime').textContent = Math.floor(t / 60) + ':' + ('0' + t % 60).slice(-2); }, 1000);
@@ -345,9 +346,10 @@ function recStart(name) {
 }
 function recStop(discard) {
   clearInterval(REC.timer); $('recBadge').hidden = true;
-  if (REC.rec && REC.rec.state !== 'inactive') { if (discard) { REC.rec.onstop = null; REC.chunks = []; } try { REC.rec.stop(); } catch (e) {} }
-  if (discard) { REC.rec = null; REC.blob = null; }
+  if (REC.rec && REC.rec.state !== 'inactive') { if (discard) { REC.rec.onstop = null; REC.rec.ondataavailable = null; REC.chunks = []; } try { REC.rec.stop(); } catch (e) {} }
+  if (discard) REC.rec = null;
 }
+function recUnsaved() { return !!REC.blob && !REC.saved && !REC.rec; }
 function recExt() { return /mp4/.test(REC.mime) ? 'mp4' : 'webm'; }
 function recFile() { var d = new Date(), ds = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); return 'nocap-' + REC.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + ds + '.' + recExt(); }
 function recSize() { return REC.blob ? (REC.blob.size > 1048576 ? (REC.blob.size / 1048576).toFixed(1) + ' MB' : Math.round(REC.blob.size / 1024) + ' KB') : ''; }

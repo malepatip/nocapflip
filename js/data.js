@@ -119,3 +119,5 @@ function fartSynth(t) {
 /* seeded noise for the AI kids */
 function gauss() { var u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
 function $(id) { return document.getElementById(id); }
+/* player names come from the network: escape before they go into innerHTML */
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }

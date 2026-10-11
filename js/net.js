@@ -25,6 +25,18 @@ function netInit() {
 }
 function roomRef(code) { return NET.db.doc('rooms/' + code); }
 function throwsRef(code) { return NET.db.collection('rooms/' + code + '/throws'); }
+/* read-modify-write on a room without losing a write that lands at the same moment (two friends joining at once).
+   fn(data or null) returns { upd, res }: upd is written if set, res is handed back. */
+function roomTxn(code, fn) {
+  var ref = roomRef(code);
+  if (NET.db.runTransaction) return NET.db.runTransaction(function (tx) { return tx.get(ref).then(function (s) { var r = fn(s.exists ? s.data() : null) || {}; if (r.upd) tx.update(ref, r.upd); return r.res; }); });
+  return (async function () {
+    try { if (ref.acquire) await ref.acquire({ holder: NET.uid, ttlMs: 4000 }); } catch (e) {}
+    var s = await ref.get(), r = fn(s.exists ? s.data() : null) || {};
+    if (r.upd) await ref.update(r.upd);
+    return r.res;
+  })();
+}
 function newCode() { var A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', c = ''; for (var i = 0; i < 5; i++) c += A[Math.floor(Math.random() * A.length)]; return c; }
 function tid(seq) { var s = String(seq); while (s.length < 4) s = '0' + s; return 't' + s; }
 function iso() { return new Date().toISOString(); }
@@ -104,17 +116,16 @@ async function openCode(code) {
 }
 $('btnJoinCancel').addEventListener('click', function () { M = null; show('home'); });
 async function netJoin(code, name) {
-  var ref = roomRef(code);
   try {
-    try { if (ref.acquire) await ref.acquire({ holder: NET.uid, ttlMs: 4000 }); } catch (e) {}
-    var snap = await ref.get(); if (!snap.exists) { toast('No table with that code.'); return; }
-    var d = snap.data(), idx = d.players.findIndex(function (p) { return p.id === NET.uid; });
-    if (idx < 0) {
-      if (d.status !== 'lobby') { netEnter(code); return; }
-      if (d.players.length >= 6) { toast('That table is full.'); return; }
+    var res = await roomTxn(code, function (d) {
+      if (!d) return { res: 'gone' };
+      if (d.players.some(function (p) { return p.id === NET.uid; }) || d.status !== 'lobby') return { res: 'enter' };
+      if (d.players.length >= 6) return { res: 'full' };
       var players = d.players.concat([{ id: NET.uid, name: name, skin: S.active }]);
-      await ref.update({ players: players, pts: players.map(function () { return 0; }) });
-    }
+      return { upd: { players: players, pts: players.map(function () { return 0; }) }, res: 'enter' };
+    });
+    if (res === 'gone') { toast('No table with that code.'); return; }
+    if (res === 'full') { toast('That table is full.'); return; }
     netEnter(code);
   } catch (e) { noWrite(e); toast('Could not join. ' + (NET.canWrite === false ? 'You need Contributor access to this page.' : dbErr(e))); }
 }
@@ -134,7 +145,7 @@ function netLeave(full) {
     var d = NET.state;
     if (NET.host && (d.status === 'lobby' || d.status === 'playing')) roomRef(d.code).update({ status: 'closed' }).catch(function () {});
     else if (d.status === 'lobby') {
-      if (!NET.host) { var players = d.players.filter(function (p) { return p.id !== NET.uid; }); roomRef(d.code).update({ players: players, pts: players.map(function () { return 0; }) }).catch(function () {}); }
+      if (!NET.host) { var uid = NET.uid; roomTxn(d.code, function (f) { if (!f || f.status !== 'lobby') return null; var players = f.players.filter(function (p) { return p.id !== uid; }); return { upd: { players: players, pts: players.map(function () { return 0; }) } }; }).catch(function () {}); }
     }
   }
   NET.code = ''; NET.state = null; NET.queue = []; NET.early = []; clearTimeout(NET.waitTimer); NET.waitTimer = null;
@@ -155,7 +166,7 @@ function netBeat() {
     var s = NET.state; if (!s || !NET.db || (s.status !== 'lobby' && s.status !== 'playing')) { clearInterval(NET.beat); NET.beat = null; return; }
     if (NET.host) { roomRef(s.code).update({ hb: Date.now() }).catch(function () {}); return; }
     if (s.hb !== NET.hbV) { NET.hbV = s.hb; NET.hbAt = Date.now(); }
-    else if (s.hb && s.status === 'playing' && Date.now() - NET.hbAt > 120000) { toast('The host left, so the game ended.'); recStop(false); netLeave(false); M = null; show('home'); }
+    else if (s.status === 'playing' && Date.now() - NET.hbAt > 120000) { toast('The host left, so the game ended.'); recStop(false); netLeave(false); M = null; show('home'); }
   }, 8000);
 }
 function onRoom(snap) {
@@ -187,7 +198,7 @@ function drain() {
   if (!M || M.mode !== 'link' || M.busy || !NET.queue.length) return;
   var t = NET.queue.shift(); NET.played = Math.max(NET.played, t.seq);
   if (M.done) return drain();
-  M.busy = true; inputEnabled = false; R.aim = null; M.turn = t.p; M.seq = t.seq; updateHud(); setHint('<b>' + M.players[t.p].name + '</b> flipped');
+  M.busy = true; inputEnabled = false; R.aim = null; M.turn = t.p; M.seq = t.seq; updateHud(); setHint('<b>' + esc(M.players[t.p].name) + '</b> flipped');
   var r = score(t.o, t.p, false);
   present(t.o, t.p, r, decTrail(t.tr), t.skin, false, function () { M.busy = false; if (NET.queue.length) drain(); else applyRoom(); });
 }
@@ -213,12 +224,15 @@ function netThrow(t) {
   var p = throwsRef(code).doc(tid(t.seq)).set(Object.assign({ at: iso() }, t));
   if (mode !== 'link') { p.catch(noWrite); return; }
   p.then(function () {
-    var d = NET.state; if (!d) return;
-    var pts = d.pts.slice(); pts[t.p] = (pts[t.p] || 0) + (t.o === 'cap' ? 2 : t.o === 'land' ? 1 : 0);
-    var w = -1; pts.forEach(function (v, i) { if (w < 0 && v >= d.goal) w = i; });
-    var upd = { seq: t.seq, pts: pts, turn: w >= 0 ? d.turn : (t.p + 1) % d.players.length, last: { seq: t.seq, p: t.p, o: t.o } };
-    if (w >= 0) { upd.status = 'done'; upd.winner = w; upd.ended = iso(); }
-    return roomRef(code).update(upd).then(function () { if (w >= 0 && !d.record) wipeThrows(code); if (w >= 0 && d.record) tapeIndex(d, pts, w); });
+    /* score on the table's current state, so a skip or another write at the same moment is not overwritten */
+    return roomTxn(code, function (d) {
+      if (!d || d.status !== 'playing' || d.seq >= t.seq) return null;
+      var pts = d.pts.slice(); pts[t.p] = (pts[t.p] || 0) + (t.o === 'cap' ? 2 : t.o === 'land' ? 1 : 0);
+      var w = -1; pts.forEach(function (v, i) { if (w < 0 && v >= d.goal) w = i; });
+      var upd = { seq: t.seq, pts: pts, turn: w >= 0 ? d.turn : (t.p + 1) % d.players.length, last: { seq: t.seq, p: t.p, o: t.o } };
+      if (w >= 0) { upd.status = 'done'; upd.winner = w; upd.ended = iso(); }
+      return { upd: upd, res: { d: d, pts: pts, w: w } };
+    }).then(function (r) { if (!r || r.w < 0) return; if (!r.d.record) wipeThrows(code); else tapeIndex(r.d, r.pts, r.w); });
   }).catch(noWrite);
 }
 function wipeThrows(code) { throwsRef(code).get().then(function (s) { s.docs.forEach(function (doc) { throwsRef(code).doc(doc.id).delete().catch(function () {}); }); }).catch(function () {}); }
@@ -243,6 +257,7 @@ function renderLobby(d, meIdx) {
   var hostName = (d.players.find(function (p) { return p.id === d.host; }) || {}).name || 'the host';
   $('lobbyNote').textContent = meIdx < 0 ? 'You are watching this table.' : NET.host ? (d.players.length < 2 ? 'Waiting for at least one more phone…' : d.players.length + ' phones in. Start when everyone is here.') : 'Waiting for ' + hostName + ' to start…';
   $('btnLobbyStart').hidden = !(NET.host && d.players.length >= 2);
+  renderSaveNudge();
 }
 $('btnLobbyStart').addEventListener('click', function () { var d = NET.state; if (!d) return; sfx('tap'); roomRef(d.code).update({ status: 'playing', turn: 0, pts: d.players.map(function () { return 0; }), seq: 0, started: iso() }).catch(noWrite); });
 $('btnLobbyLeave').addEventListener('click', function () { netLeave(); M = null; show('home'); });
@@ -272,14 +287,14 @@ function recSave() {
   if (REC.rec) { REC.saveQueued = true; recStop(false); return; }
   if (!REC.blob) { toast('No video to save yet.'); return; }
   if (!NET.dl) {
-    if (!IN_CLAUDE) { try { var a = document.createElement('a'), u = URL.createObjectURL(REC.blob); a.href = u; a.download = recFile(); document.body.appendChild(a); a.click(); setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(u); }, 4000); toast('Saving ' + recFile()); } catch (e) { toast('Could not save the video here.'); } return; }
+    if (!IN_CLAUDE) { try { var a = document.createElement('a'), u = URL.createObjectURL(REC.blob); a.href = u; a.download = recFile(); document.body.appendChild(a); a.click(); setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(u); }, 4000); REC.saved = true; renderSaveNudge(); toast('Saving ' + recFile()); } catch (e) { toast('Could not save the video here.'); } return; }
     toast('Saving files is not available in this viewer. Use your phone\'s screen recorder instead.'); return;
   }
-  var name = recFile(); $('btnSave').disabled = true; $('btnSaveHome').disabled = true;
-  NET.dl.save({ filename: name, data: REC.blob }).then(function () { toast('Saved ' + name); }).catch(function (e) {
+  var name = recFile(); $('btnSave').disabled = true; $('btnSaveHome').disabled = true; $('btnSaveLobby').disabled = true;
+  NET.dl.save({ filename: name, data: REC.blob }).then(function () { REC.saved = true; renderSaveNudge(); toast('Saved ' + name); }).catch(function (e) {
     var c = e && e.code; if (c === 'declined') return;
     toast(c === 'too_large' ? 'That video is too big to save on this device.' : c === 'rate_limited' ? 'A save prompt is already open.' : c === 'rejected_extension' || c === 'extension_not_enabled' ? 'Video files cannot be saved from this page here.' : 'Could not save the video here.');
-  }).finally(function () { $('btnSave').disabled = false; $('btnSaveHome').disabled = false; });
+  }).finally(function () { $('btnSave').disabled = false; $('btnSaveHome').disabled = false; $('btnSaveLobby').disabled = false; });
 }
 
 /* ----- recording local games (vs the kids, pass the phone) ----- */
@@ -288,6 +303,7 @@ function netRecordStart() {
   var code = newCode(); M.code = code;
   roomRef(code).set({ code: code, host: NET.uid, created: iso(), status: 'playing', mode: M.mode, stage: M.stageId, venue: M.venue, goal: M.goal, record: true, players: M.players.map(function (p) { return { id: p.id, name: p.name, skin: p.skin }; }), pts: M.pts.slice(), turn: 0, seq: 0, winner: -1, next: '' }).catch(function (e) { noWrite(e); M.code = ''; });
 }
+function netRecordQuit() { if (NET.db && M && M.code && !M.done && (M.mode === 'ladder' || M.mode === 'two')) roomRef(M.code).update({ status: 'closed' }).catch(function () {}); }
 function netRecordEnd(w) { if (!NET.db || !M.code) return; var m = M; roomRef(M.code).update({ status: 'done', winner: w, pts: M.pts.slice(), seq: M.seq, ended: iso() }).then(function () { tapeIndex({ code: m.code, created: m.createdAt || iso(), mode: m.mode, stage: m.stageId, venue: m.venue, goal: m.goal, players: m.players }, m.pts.slice(), w); }).catch(noWrite); }
 /* the shelf: one small document per recorded game, ordered by time (a single-field order needs no index anywhere) */
 function tapeIndex(d, pts, w) { if (!NET.db) return; NET.db.doc('tapes/' + d.code).set({ code: d.code, created: d.created || iso(), mode: d.mode || 'link', stage: d.stage, venue: d.venue || 'cafeteria', goal: d.goal, players: (d.players || []).map(function (p) { return { id: p.id, name: p.name, skin: p.skin }; }), pts: pts, winner: w, flips: (M && M.code === d.code) ? M.seq : 0 }).catch(function () {}); }
@@ -322,7 +338,7 @@ function tapePlay() {
   var step = function () {
     if (!M || M.id !== id || M.mode !== 'tape' || M.done) return;
     if (i >= M.tape.length) { endMatch(M.tapeWinner >= 0 ? M.tapeWinner : leaderIdx()); return; }
-    var t = M.tape[i++]; M.turn = t.p; M.seq = t.seq; updateHud(); setHint('<b>' + M.players[t.p].name + '</b> · flip ' + t.seq + ' of ' + M.tape.length);
+    var t = M.tape[i++]; M.turn = t.p; M.seq = t.seq; updateHud(); setHint('<b>' + esc(M.players[t.p].name) + '</b> · flip ' + t.seq + ' of ' + M.tape.length);
     var r = score(t.o, t.p, false); M.busy = true;
     present(t.o, t.p, r, decTrail(t.tr), t.skin, false, function () { M.busy = false; setTimeout(step, 400); });
   };

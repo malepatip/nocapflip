@@ -1,25 +1,44 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Anyone can read. Anyone can make or join a table (no sign-in), with size caps so nobody can dump junk in.
+    // No sign-in yet, so these rules cap what a stranger can do rather than who can do it.
+    // Names: the page allows 14 characters; a little slack here.
+    function okName(p, i) { return p.size() <= i || (p[i].name is string && p[i].name.size() <= 24); }
+    function okPlayers(p) { return p is list && p.size() <= 6
+      && okName(p, 0) && okName(p, 1) && okName(p, 2) && okName(p, 3) && okName(p, 4) && okName(p, 5); }
+    function room(code) { return get(/databases/$(database)/documents/rooms/$(code)).data; }
+
+    // Anyone can read. Anyone can make or join a table, with size caps so nobody can dump junk in.
     match /rooms/{code} {
       allow read: if true;
       allow create: if request.resource.data.code == code
-                    && request.resource.data.players is list && request.resource.data.players.size() <= 6
-                    && request.resource.data.status in ['lobby', 'playing'];
-      allow update: if request.resource.data.players is list && request.resource.data.players.size() <= 6;
+                    && okPlayers(request.resource.data.players)
+                    && request.resource.data.status in ['lobby', 'playing']
+                    && request.resource.data.goal is int && request.resource.data.goal >= 1 && request.resource.data.goal <= 10;
+      // code, host and goal never change; a finished or closed table stays finished or closed
+      allow update: if okPlayers(request.resource.data.players)
+                    && request.resource.data.code == resource.data.code
+                    && request.resource.data.host == resource.data.host
+                    && request.resource.data.goal == resource.data.goal
+                    && (!(resource.data.status in ['done', 'closed']) || request.resource.data.status == resource.data.status);
       allow delete: if false;
       match /throws/{t} {
         allow read: if true;
+        // flips only go onto a table that is in play
         allow create: if request.resource.data.tr is string && request.resource.data.tr.size() < 20000
-                      && request.resource.data.seq is int;
+                      && request.resource.data.seq is int
+                      && room(code).status == 'playing';
         allow update: if false;
-        allow delete: if true;   // unrecorded games wipe their flips at the end
+        // only unrecorded games wipe their flips at the end; a tape can't be erased
+        allow delete: if room(code).record == false;
       }
     }
+    // the shelf entry for a finished, taped game
     match /tapes/{code} {
       allow read: if true;
-      allow create, update: if request.resource.data.code == code;
+      allow create, update: if request.resource.data.code == code
+                            && okPlayers(request.resource.data.players)
+                            && room(code).status == 'done';
       allow delete: if false;
     }
   }

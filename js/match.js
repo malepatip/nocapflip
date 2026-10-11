@@ -36,6 +36,7 @@ function renderTable() {
    M.mode: ladder (you vs a kid), two (pass the phone), link (phones over the network), tape (playback of a recording) */
 var M = null, epTimer = null;
 function openMatch(o) {
+  netRecordQuit();
   var kid = o.kid || null, idx = kid ? KIDS.indexOf(kid) : -1;
   var players = o.players || (kid ? [{ id: 'me', name: 'You', skin: S.active }, { id: 'kid:' + kid.id, name: kid.name, skin: kid.skin }] : null);
   M = { id: Date.now() + Math.random(), mode: o.mode, kid: kid, stageId: o.stageId || (kid ? kid.stage : 'table'), venue: o.venue || (kid && kid.venue) || 'cafeteria', goal: o.goal || (kid ? kid.goal : 3), players: players, pts: players.map(function () { return 0; }),
@@ -61,7 +62,7 @@ function updateHud() {
   var n = M.players.length, l = n > 2 ? M.turn : 0, r = n < 2 ? 0 : n > 2 ? (leaderIdx() === M.turn ? (M.turn + 1) % n : leaderIdx()) : 1;
   $('nameL').textContent = M.players[l].name; $('nameR').textContent = M.players[r].name;
   $('nameL').classList.toggle('active', M.turn === l); $('nameR').classList.toggle('active', M.turn === r);
-  $('score').innerHTML = M.pts[l] + '&ndash;' + M.pts[r]; $('goal').textContent = 'first to ' + M.goal + ' · ' + STAGE_WORDS[M.stageId];
+  $('score').textContent = M.pts[l] + '\u2013' + M.pts[r]; $('goal').textContent = 'first to ' + M.goal + ' · ' + STAGE_WORDS[M.stageId];
   [['pipsL', l], ['pipsR', r]].forEach(function (x) { var h = ''; for (var k = 0; k < M.goal; k++) h += '<span class="pip' + (k < M.pts[x[1]] ? ' on' : '') + '"></span>'; $(x[0]).innerHTML = h; });
   $('matchAura').textContent = fmt(S.aura) + ' aura';
   var goal = 'FIRST TO ' + M.goal + (M.mode === 'ladder' ? ' · EP ' + M.ep : M.code ? ' · ' + M.code : '');
@@ -88,7 +89,7 @@ function myTurn() { return M.mode === 'two' || (M.mode === 'ladder' && M.turn ==
 function beginTurn() {
   if (!M || M.done) return;
   updateHud(); R.state = 'idle'; R.aim = null; R.skin = M.players[M.turn].skin; R.pose = null;
-  var who = M.players[M.turn].name;
+  var who = esc(M.players[M.turn].name);
   if (isAI()) { inputEnabled = false; setHint('<b>' + who + '</b> is flipping…'); var id = M.id; setTimeout(function () { if (M && M.id === id && current === 'match') aiThrow(); }, 900); }
   else if (myTurn()) { inputEnabled = true; setHint((M.mode === 'two' ? '<b>' + who + '</b>, s' : 'S') + 'wipe <b>up</b> to flip' + (R.lastHuman ? ' · Space repeats your last flip' : '')); }
   else { inputEnabled = false; setHint('Waiting on <b>' + who + '</b>…' + (M.host ? ' <button class="btn btn-ghost" id="btnSkip" style="min-height:28px;padding:2px 8px;font-size:13px">skip their turn</button>' : '')); var sk = $('btnSkip'); if (sk) sk.addEventListener('click', netSkipTurn); }
@@ -174,24 +175,34 @@ function endMatch(w) {
   var recording = !!REC.rec; $('btnSave').hidden = !recording; $('endVideo').hidden = !recording; if (recording) { $('endVideo').textContent = 'Recording the end card… the video is ready in a few seconds.'; var mid = M.id; setTimeout(function () { if (M && M.id === mid) recStop(false); }, 2700); }
   hideSheets(); $('sheetEnd').hidden = false;
 }
-function recDone() {
-  if (REC.blob) { $('endVideo').textContent = 'Video ' + recLen() + ' · ' + recSize() + ' · ' + recExt() + ', ' + cv.width + '×' + cv.height + ' vertical'; $('endVideo').hidden = false; $('btnSave').hidden = false; $('lastVideo').hidden = false; $('videoNote').textContent = recLen() + ' · ' + recSize() + ' · ' + REC.name; }
+function recDone(got) {
+  if (got) { $('endVideo').textContent = 'Video ' + recLen() + ' · ' + recSize() + ' · ' + recExt() + ', ' + cv.width + '×' + cv.height + ' vertical'; $('endVideo').hidden = false; $('btnSave').hidden = false; $('lastVideo').hidden = false; $('videoNote').textContent = recLen() + ' · ' + recSize() + ' · ' + REC.name; }
   else { $('endVideo').textContent = 'The recording came out empty on this browser.'; }
   if (REC.saveQueued) { REC.saveQueued = false; recSave(); }
+  renderSaveNudge();
+}
+function renderSaveNudge() { $('lastVideo').hidden = !REC.blob; $('btnSaveLobby').hidden = !recUnsaved(); }
+/* the next game's recording replaces the last video, so ask once before moving on without saving it */
+var leaveArmed = null;
+function guardVideo(btn, go) {
+  if (!(REC.rec || recUnsaved()) || leaveArmed === btn) { leaveArmed = null; go(); return; }
+  leaveArmed = btn; var keep = btn.textContent; btn.textContent = 'Video not saved. Tap again to go on';
+  setTimeout(function () { if (leaveArmed === btn) { leaveArmed = null; btn.textContent = keep; } }, 3000);
 }
 $('btnSave').addEventListener('click', function () { recSave(); });
 $('btnSaveHome').addEventListener('click', function () { recSave(); });
-$('btnNext').addEventListener('click', function () { var i = nextKid(); if (i >= 0) openMatch({ mode: 'ladder', kid: KIDS[i] }); else show('table'); });
-$('btnAgain').addEventListener('click', function () { if (M.mode === 'ladder') openMatch({ mode: 'ladder', kid: M.kid }); else if (M.mode === 'two') openMatch({ mode: 'two', players: M.players }); else if (M.mode === 'tape') tapeOpen(M.code); else netRematch(); });
-$('btnToTable').addEventListener('click', function () { var mode = M.mode; recStop(false); netLeave(); M = null; R.slate = null; R.stamps = []; show(mode === 'ladder' ? 'table' : 'home'); });
-$('btnQuit').addEventListener('click', function () { clearInterval(epTimer); var mode = M && M.mode; recStop(false); netLeave(); M = null; R.slate = null; R.stamps = []; show(mode === 'ladder' ? 'table' : 'home'); });
+$('btnSaveLobby').addEventListener('click', function () { recSave(); });
+$('btnNext').addEventListener('click', function () { guardVideo(this, function () { var i = nextKid(); if (i >= 0) openMatch({ mode: 'ladder', kid: KIDS[i] }); else show('table'); }); });
+$('btnAgain').addEventListener('click', function () { guardVideo(this, function () { if (M.mode === 'ladder') openMatch({ mode: 'ladder', kid: M.kid }); else if (M.mode === 'two') openMatch({ mode: 'two', players: M.players }); else if (M.mode === 'tape') tapeOpen(M.code); else netRematch(); }); });
+$('btnToTable').addEventListener('click', function () { guardVideo(this, function () { var mode = M.mode; recStop(false); netLeave(); M = null; R.slate = null; R.stamps = []; show(mode === 'ladder' ? 'table' : 'home'); }); });
+$('btnQuit').addEventListener('click', function () { clearInterval(epTimer); var mode = M && M.mode; netRecordQuit(); recStop(false); netLeave(); M = null; R.slate = null; R.stamps = []; show(mode === 'ladder' ? 'table' : 'home'); });
 
 /* ---------- 2 player, one phone ---------- */
 $('btnTwo').addEventListener('click', function () { sfx('tap'); openMatch({ mode: 'two', players: [{ id: 'p1', name: 'Player 1', skin: S.active }, { id: 'p2', name: 'Player 2', skin: S.active }] }); hideSheets(); $('sheetTwo').hidden = false; });
 var twoVenue = 'cafeteria';
 $('segVenue2').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; Array.prototype.forEach.call($('segVenue2').children, function (x) { x.setAttribute('aria-pressed', 'false'); }); b.setAttribute('aria-pressed', 'true'); twoVenue = b.dataset.v; sfx('tap'); });
 $('btnTwoStart').addEventListener('click', function () { var a = $('p1').value.trim() || 'Player 1', b = $('p2').value.trim() || 'Player 2'; openMatch({ mode: 'two', venue: twoVenue, players: [{ id: 'p1', name: a, skin: S.active }, { id: 'p2', name: b, skin: S.active }] }); });
-$('btnTwoCancel').addEventListener('click', function () { M = null; show('home'); });
+$('btnTwoCancel').addEventListener('click', function () { netRecordQuit(); M = null; show('home'); });
 
 /* ---------- home / table buttons ---------- */
 $('btnLadder').addEventListener('click', function () { sfx('tap'); show('table'); });
