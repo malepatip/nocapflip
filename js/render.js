@@ -1,7 +1,7 @@
 /* ---------- rendering ---------- */
 var cv = $('cv'), ctx = cv.getContext('2d'), DPR = 2; /* fixed: the canvas backing store is 1080×1920, which is what the video records */
 cv.width = NC.W * DPR; cv.height = NC.H * DPR;
-var R = { stageId: 'table', state: 'idle', thr: null, pose: null, skin: 'tap', aim: null, replay: null, acc: 0, last: 0, board: null, surfaceY: NC.TABLE_Y };
+var R = { stageId: 'table', state: 'idle', thr: null, pose: null, skin: 'tap', aim: null, replay: null, acc: 0, last: 0, board: null, surfaceY: NC.TABLE_Y, camY: 0 };
 
 /* speckled laminate, drawn once */
 var lam = document.createElement('canvas'); lam.width = 120; lam.height = 120;
@@ -13,12 +13,12 @@ function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x 
 
 /* ---------- venues: where in the school you are flipping ---------- */
 var VENUES = {
-  cafeteria: { name: 'Cafeteria', seat: 'stool', top: 'lam', floor: '#b9b3a7', floorLine: '#8f897d' },
-  classroom: { name: 'Classroom', seat: 'chair', top: 'wood', floor: '#d8d2c0', floorLine: '#a79f8a' },
-  restroom:  { name: 'Restroom', seat: 'bin', top: 'counter', floor: '#c4ccd0', floorLine: '#8e999f' },
-  gym:       { name: 'Gym', seat: 'ball', top: 'bench', floor: '#c98b4d', floorLine: '#8c5a2b' },
-  hallway:   { name: 'Hallway', seat: 'none', top: 'bench', floor: '#c9c4b6', floorLine: '#938d7d' },
-  outside:   { name: 'Outside', seat: 'none', top: 'picnic', floor: '#6f7378', floorLine: '#4d5156' }
+  cafeteria: { name: 'Cafeteria', seat: 'stool', top: 'lam', floor: '#b9b3a7', floorLine: '#8f897d', wallTop: '#cfe0d1' },
+  classroom: { name: 'Classroom', seat: 'chair', top: 'wood', floor: '#d8d2c0', floorLine: '#a79f8a', wallTop: '#e8dfc7' },
+  restroom:  { name: 'Restroom', seat: 'bin', top: 'counter', floor: '#c4ccd0', floorLine: '#8e999f', wallTop: '#dbe8ee' },
+  gym:       { name: 'Gym', seat: 'ball', top: 'bench', floor: '#c98b4d', floorLine: '#8c5a2b', wallTop: '#e9c35a' },
+  hallway:   { name: 'Hallway', seat: 'none', top: 'bench', floor: '#c9c4b6', floorLine: '#938d7d', wallTop: '#d9d6c8' },
+  outside:   { name: 'Outside', seat: 'none', top: 'picnic', floor: '#6f7378', floorLine: '#4d5156', wallTop: '#7fc1ee' }
 };
 var VENUE_ORDER = ['cafeteria', 'classroom', 'restroom', 'gym', 'hallway', 'outside'];
 var VENUE_WORDS = { cafeteria: 'the cafeteria', classroom: 'the classroom', restroom: 'the restroom', gym: 'the gym', hallway: 'the hallway', outside: 'outside by the fence' };
@@ -264,15 +264,24 @@ function drawAim() {
 function render() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   var st = NC.STAGES[R.stageId];
-  drawRoom(st); drawBoard();
+  var vn = VENUES[R.venue] ? R.venue : 'cafeteria';
   var p = null;
   if (R.state === 'replay' && R.replay) { var fr = R.replay.trail[Math.min(R.replay.trail.length - 1, Math.floor(R.replay.i))]; p = { x: fr[0], y: fr[1], a: fr[2], skin: R.replay.skin }; }
   else if (R.state === 'flight' && R.thr) { var b = R.thr.bottle.parts[1]; p = { x: b.position.x, y: b.position.y, a: R.thr.bottle.angle, skin: R.skin }; }
   else if (R.pose) p = R.pose;
   else p = { x: NC.LAUNCH_X, y: NC.TABLE_Y - NC.BOTTLES[SKINS[R.skin].type].h / 2, a: 0, skin: R.skin };
+  /* camera follows the bottle when it's high above the canvas top; lerps back as it falls */
+  var MARGIN = 240;
+  var target = (R.state === 'flight' || R.state === 'replay') ? Math.max(0, MARGIN - p.y) : 0;
+  R.camY += (target - R.camY) * 0.18; if (Math.abs(R.camY - target) < 0.4) R.camY = target;
+  /* fill the strip exposed above the room by the camera pan with the venue's wall-top color */
+  if (R.camY > 0) { ctx.fillStyle = VENUES[vn].wallTop || '#8fb49a'; ctx.fillRect(0, 0, NC.W, Math.ceil(R.camY) + 1); }
+  ctx.save(); ctx.translate(0, R.camY);
+  drawRoom(st); drawBoard();
   drawShadow(p.x, p.y, NC.BOTTLES[SKINS[p.skin].type].h);
   drawBottle(p.x, p.y, p.a, p.skin);
   if (R.state === 'idle') drawAim();
+  ctx.restore();
   drawStamps(); drawSlate();
 }
 
