@@ -31,6 +31,7 @@ GitHub `malepatip/nocapflip` -> Cloudflare Workers Builds (static assets). `wran
 - `firestore.rules` deploys via `firebase deploy --only firestore:rules` (project `nocapflip-64f0a`); the Cloudflare push does not touch it (and `.assetsignore` keeps it out of the bundle).
 - Firestore writes need an authenticated Firebase user: `net.js` calls `firebase.auth().signInAnonymously()` on load; rooms carry a `playerIds` array mirroring `players[].id` so rules can check `request.auth.uid in playerIds` or `== host`.
 - The browser API key is locked in Google Cloud to referrers `https://nocapflip.com/*` and `https://www.nocapflip.com/*`, and to four APIs (`firestore`, `identitytoolkit`, `securetoken`, `firebaseinstallations`); adding Analytics, FCM, Storage, Hosting, etc. will need the service added to that allowlist.
+- `nice.m4a` and `fail.m4a` at the repo root are owner-sourced meme clips used by clean-sounds mode; the synth sad-trombone and speechSynthesis "nice" are only fallbacks when the files haven't decoded yet. Do not delete or replace with synth without asking Phani.
 - Do not put JS lines mentioning "firebase-config.js" into index.html by scripted filtering (it once leaked raw code onto the page).
 
 ## Open items
