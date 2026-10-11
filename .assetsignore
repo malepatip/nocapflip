@@ -4,8 +4,10 @@ README.md
 CLAUDE.md
 firestore.rules
 .git
+.gitignore
 node_modules
 firebase.json
 .firebaserc
 .firebase
 firebase-debug.log
+recorder
