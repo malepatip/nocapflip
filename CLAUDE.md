@@ -34,5 +34,4 @@ GitHub `malepatip/nocapflip` -> Cloudflare Workers Builds (static assets). `wran
 - Do not put JS lines mentioning "firebase-config.js" into index.html by scripted filtering (it once leaked raw code onto the page).
 
 ## Open items
-- Test two real phones with a fresh table (now that anonymous auth is on and the browser API key is locked to nocapflip.com).
 - Ideas offered: 1200x630 social preview image; more venues (bus, science lab, locker room, main office); per-turn shot clock.
