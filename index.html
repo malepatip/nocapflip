@@ -178,6 +178,9 @@ label { font-size: 13px; font-weight: 700; color: var(--ink-2); display: flex; f
 .clipbar .rec, .recbadge .rec { width: 10px; height: 10px; border-radius: 50%; background: var(--red); animation: blink 1.2s infinite; }
 .recbadge { position: absolute; top: 10px; left: 10px; display: flex; gap: 6px; align-items: center; background: rgba(30,42,35,.85); color: #fff; border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 700; letter-spacing: .06em; pointer-events: none; }
 .clip-on .recbadge { top: auto; bottom: 10px; }
+.shotclock { position: absolute; top: 10px; right: 10px; background: rgba(30,42,35,.85); color: #fff; border-radius: 999px; padding: 5px 12px; font-size: 14px; font-weight: 800; min-width: 36px; text-align: center; pointer-events: none; font-variant-numeric: tabular-nums; }
+.shotclock.low { background: var(--red); animation: blink .6s infinite; }
+.clip-on .shotclock { top: auto; bottom: 10px; right: 10px; }
 .stage .overlay { display: none; }
 @keyframes blink { 50% { opacity: .2; } }
 @media (prefers-reduced-motion: reduce) { .stamp { animation-duration: .01s; } .clipbar .rec { animation: none; } .btn { transition: none; } }
@@ -260,6 +263,7 @@ label { font-size: 13px; font-weight: 700; color: var(--ink-2); display: flex; f
       <div class="overlay" id="overlay"></div>
       <div class="clipbar" id="clipbar" hidden><span class="rec"></span><span id="clipTitle">EP 1</span></div>
       <div class="recbadge" id="recBadge" hidden><span class="rec"></span>REC <span id="recTime" class="num">0:00</span></div>
+      <div class="shotclock" id="shotClock" hidden><span id="shotClockN">20</span></div>
       <div class="toast" id="toast" hidden></div>
 
       <div class="sheet" id="sheetEp" hidden>

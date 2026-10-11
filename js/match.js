@@ -86,15 +86,35 @@ function matchIntro() {
 }
 function isAI() { return M.mode === 'ladder' && M.turn === 1; }
 function myTurn() { return M.mode === 'two' || (M.mode === 'ladder' && M.turn === 0) || (M.mode === 'link' && M.turn === M.me); }
+/* 20s per-turn shot clock on local human turns; timeout counts as a flop (goes through onOutcome so remote players see it) */
+var CLOCK_MS = 20000, clockTimer = null, clockDeadline = 0;
+function clockStop() { if (clockTimer) { clearInterval(clockTimer); clockTimer = null; } var el = $('shotClock'); if (el) { el.hidden = true; el.classList.remove('low'); } }
+function clockStart() {
+  clockStop(); if (!M || M.done || M.mode === 'tape' || isAI() || !myTurn()) return;
+  clockDeadline = Date.now() + CLOCK_MS;
+  var el = $('shotClock'), n = $('shotClockN'); if (!el || !n) return; el.hidden = false;
+  var id = M.id, tick = function () {
+    if (!M || M.id !== id || M.done || !myTurn() || isAI()) { clockStop(); return; }
+    var left = Math.max(0, clockDeadline - Date.now()); n.textContent = Math.ceil(left / 1000); el.classList.toggle('low', left <= 5000);
+    if (left <= 0) { clockStop(); shotClockExpired(); }
+  };
+  tick(); clockTimer = setInterval(tick, 200);
+}
+function shotClockExpired() {
+  if (!M || M.done || !myTurn() || isAI() || M.busy) return;
+  inputEnabled = false; M.last = { power: 0, angle: 0 }; setHint('Shot clock expired · flop'); onOutcome('flop', []);
+}
 function beginTurn() {
   if (!M || M.done) return;
+  clockStop();
   updateHud(); R.state = 'idle'; R.aim = null; R.skin = M.players[M.turn].skin; R.pose = null;
   var who = esc(M.players[M.turn].name);
   if (isAI()) { inputEnabled = false; setHint('<b>' + who + '</b> is flipping…'); var id = M.id; setTimeout(function () { if (M && M.id === id && current === 'match') aiThrow(); }, 900); }
-  else if (myTurn()) { inputEnabled = true; setHint((M.mode === 'two' ? '<b>' + who + '</b>, s' : 'S') + 'wipe <b>up</b> to flip' + (R.lastHuman ? ' · Space repeats your last flip' : '')); }
+  else if (myTurn()) { inputEnabled = true; setHint((M.mode === 'two' ? '<b>' + who + '</b>, s' : 'S') + 'wipe <b>up</b> to flip' + (R.lastHuman ? ' · Space repeats your last flip' : '')); clockStart(); }
   else { inputEnabled = false; setHint('Waiting on <b>' + who + '</b>…' + (M.host ? ' <button class="btn btn-ghost" id="btnSkip" style="min-height:28px;padding:2px 8px;font-size:13px">skip their turn</button>' : '')); var sk = $('btnSkip'); if (sk) sk.addEventListener('click', netSkipTurn); }
 }
 function humanThrow(power, angle) {
+  clockStop();
   inputEnabled = false; R.lastHuman = { power: power, angle: angle }; S.stats.flips++; M.flips++;
   setHint('Power <b>' + power.toFixed(2) + '</b> · angle <b>' + Math.round(angle) + '°</b>'); sfx('tap');
   M.last = { power: power, angle: angle };
@@ -154,7 +174,7 @@ function afterThrow() {
 }
 function winner() { for (var i = 0; i < M.pts.length; i++) if (M.pts[i] >= M.goal) return i; return -1; }
 function endMatch(w) {
-  if (!M || M.done) return; M.done = true; inputEnabled = false; R.clockEnd = performance.now();
+  if (!M || M.done) return; M.done = true; inputEnabled = false; clockStop(); R.clockEnd = performance.now();
   var mine = M.mode === 'ladder' ? w === 0 : M.mode === 'link' ? w === M.me : true, delta = 0, newBottle = null, wn = M.players[w].name.toUpperCase();
   if (M.mode === 'ladder') { delta = mine ? AURA.win : AURA.lose; if (mine) { if (S.beaten.indexOf(M.kid.id) < 0) S.beaten.push(M.kid.id); if (S.bottles.indexOf(M.kid.skin) < 0) { S.bottles.push(M.kid.skin); newBottle = SKINS[M.kid.skin].name; } } }
   if (M.mode === 'link' && M.me >= 0) delta = mine ? AURA.win : AURA.lose;
