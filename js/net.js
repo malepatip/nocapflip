@@ -11,6 +11,8 @@ function netInit() {
       if (!IN_CLAUDE && window.FIREBASE_CONFIG && window.firebase && window.firebase.firestore) {
         /* self-hosted: Firestore's compat API has the same shape as the claude.ai db (doc/collection/get/set/update/onSnapshot) */
         window.firebase.initializeApp(window.FIREBASE_CONFIG); NET.db = window.firebase.firestore(); try { NET.db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) {} NET.self = true;
+        /* anonymous auth so firestore.rules can tie writes to request.auth.uid */
+        if (window.firebase.auth) { try { var cred = await window.firebase.auth().signInAnonymously(); if (cred && cred.user) NET.uid = cred.user.uid; } catch (e) { NET.initErr = e; } }
       } else if (IN_CLAUDE) {
         NET.db = await window.claude.use('db');
         NET.user = await window.claude.use('user');
@@ -83,7 +85,7 @@ $('btnRoomCreate').addEventListener('click', async function () {
   var name = $('hostName').value.trim() || 'Host'; S.name = name; save(); this.disabled = true;
   try {
     var code = newCode();
-    await roomRef(code).set({ code: code, host: NET.uid, created: iso(), status: 'lobby', mode: 'link', stage: roomOpts.stage, venue: roomOpts.venue, goal: roomOpts.goal, record: roomOpts.record, players: [{ id: NET.uid, name: name, skin: S.active }], pts: [0], turn: 0, seq: 0, winner: -1, next: '' });
+    await roomRef(code).set({ code: code, host: NET.uid, created: iso(), status: 'lobby', mode: 'link', stage: roomOpts.stage, venue: roomOpts.venue, goal: roomOpts.goal, record: roomOpts.record, players: [{ id: NET.uid, name: name, skin: S.active }], playerIds: [NET.uid], pts: [0], turn: 0, seq: 0, winner: -1, next: '' });
     netEnter(code);
   } catch (e) { noWrite(e); toast('Could not make the table. ' + dbErr(e)); }
   this.disabled = false;
@@ -122,7 +124,7 @@ async function netJoin(code, name) {
       if (d.players.some(function (p) { return p.id === NET.uid; }) || d.status !== 'lobby') return { res: 'enter' };
       if (d.players.length >= 6) return { res: 'full' };
       var players = d.players.concat([{ id: NET.uid, name: name, skin: S.active }]);
-      return { upd: { players: players, pts: players.map(function () { return 0; }) }, res: 'enter' };
+      return { upd: { players: players, playerIds: players.map(function (p) { return p.id; }), pts: players.map(function () { return 0; }) }, res: 'enter' };
     });
     if (res === 'gone') { toast('No table with that code.'); return; }
     if (res === 'full') { toast('That table is full.'); return; }
@@ -145,7 +147,7 @@ function netLeave(full) {
     var d = NET.state;
     if (NET.host && (d.status === 'lobby' || d.status === 'playing')) roomRef(d.code).update({ status: 'closed' }).catch(function () {});
     else if (d.status === 'lobby') {
-      if (!NET.host) { var uid = NET.uid; roomTxn(d.code, function (f) { if (!f || f.status !== 'lobby') return null; var players = f.players.filter(function (p) { return p.id !== uid; }); return { upd: { players: players, pts: players.map(function () { return 0; }) } }; }).catch(function () {}); }
+      if (!NET.host) { var uid = NET.uid; roomTxn(d.code, function (f) { if (!f || f.status !== 'lobby') return null; var players = f.players.filter(function (p) { return p.id !== uid; }); return { upd: { players: players, playerIds: players.map(function (p) { return p.id; }), pts: players.map(function () { return 0; }) } }; }).catch(function () {}); }
     }
   }
   NET.code = ''; NET.state = null; NET.queue = []; NET.early = []; clearTimeout(NET.waitTimer); NET.waitTimer = null;
@@ -241,7 +243,7 @@ async function netRematch() {
   var d = NET.state; if (!d || !NET.host) return;
   try {
     var code = newCode(), me = d.players.find(function (p) { return p.id === NET.uid; }) || { id: NET.uid, name: S.name || 'Host', skin: S.active };
-    await roomRef(code).set({ code: code, host: NET.uid, created: iso(), status: 'lobby', mode: 'link', stage: d.stage, venue: d.venue || 'cafeteria', goal: d.goal, record: d.record, players: [me], pts: [0], turn: 0, seq: 0, winner: -1, next: '' });
+    await roomRef(code).set({ code: code, host: NET.uid, created: iso(), status: 'lobby', mode: 'link', stage: d.stage, venue: d.venue || 'cafeteria', goal: d.goal, record: d.record, players: [me], playerIds: [NET.uid], pts: [0], turn: 0, seq: 0, winner: -1, next: '' });
     await roomRef(d.code).update({ next: code });
     netEnter(code);
   } catch (e) { noWrite(e); }
@@ -301,7 +303,7 @@ function recSave() {
 function netRecordStart() {
   M.code = ''; if (!NET.db || !S.rec || NET.canWrite === false) return;
   var code = newCode(); M.code = code;
-  roomRef(code).set({ code: code, host: NET.uid, created: iso(), status: 'playing', mode: M.mode, stage: M.stageId, venue: M.venue, goal: M.goal, record: true, players: M.players.map(function (p) { return { id: p.id, name: p.name, skin: p.skin }; }), pts: M.pts.slice(), turn: 0, seq: 0, winner: -1, next: '' }).catch(function (e) { noWrite(e); M.code = ''; });
+  roomRef(code).set({ code: code, host: NET.uid, created: iso(), status: 'playing', mode: M.mode, stage: M.stageId, venue: M.venue, goal: M.goal, record: true, players: M.players.map(function (p) { return { id: p.id, name: p.name, skin: p.skin }; }), playerIds: [NET.uid], pts: M.pts.slice(), turn: 0, seq: 0, winner: -1, next: '' }).catch(function (e) { noWrite(e); M.code = ''; });
 }
 function netRecordQuit() { if (NET.db && M && M.code && !M.done && (M.mode === 'ladder' || M.mode === 'two')) roomRef(M.code).update({ status: 'closed' }).catch(function () {}); }
 function netRecordEnd(w) { if (!NET.db || !M.code) return; var m = M; roomRef(M.code).update({ status: 'done', winner: w, pts: M.pts.slice(), seq: M.seq, ended: iso() }).then(function () { tapeIndex({ code: m.code, created: m.createdAt || iso(), mode: m.mode, stage: m.stageId, venue: m.venue, goal: m.goal, players: m.players }, m.pts.slice(), w); }).catch(noWrite); }
