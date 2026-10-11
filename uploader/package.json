@@ -3,9 +3,6 @@
   "version": "0.1.0",
   "description": "Upload nocapflip recorder output (mp4 + sidecar json + thumbnail) to YouTube.",
   "private": true,
-  "dependencies": {
-    "googleapis": "^144.0.0"
-  },
   "scripts": {
     "auth": "node auth.js",
     "upload": "node upload.js"

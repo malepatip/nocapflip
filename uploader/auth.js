@@ -7,13 +7,15 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const http = require('http');
-const { URL } = require('url');
-const { google } = require('googleapis');
+const { URL, URLSearchParams } = require('url');
 
 const CFG_DIR = path.join(os.homedir(), '.config', 'nocapflip-uploader');
 const CRED_FILE = process.env.YT_CLIENT_SECRET || path.join(CFG_DIR, 'client-secret.json');
 const TOKEN_FILE = path.join(CFG_DIR, 'token.json');
-const SCOPES = ['https://www.googleapis.com/auth/youtube.upload'];
+const SCOPES = [
+  'https://www.googleapis.com/auth/youtube.upload',
+  'https://www.googleapis.com/auth/youtube.readonly',
+];
 
 function loadClientSecret() {
   if (!fs.existsSync(CRED_FILE)) {
@@ -29,8 +31,25 @@ function loadClientSecret() {
   return section;
 }
 
-function startServer(oAuth2Client) {
+async function exchangeCode(code, clientId, clientSecret, redirectUri) {
+  // Native fetch (undici) instead of google-auth-library's gaxios/node-fetch,
+  // which hits ERR_STREAM_PREMATURE_CLOSE on gzipped responses in Termux.
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept-Encoding': 'identity' },
+    body: new URLSearchParams({
+      code, client_id: clientId, client_secret: clientSecret,
+      redirect_uri: redirectUri, grant_type: 'authorization_code',
+    }),
+  });
+  const body = await res.text();
+  if (!res.ok) throw new Error(`token endpoint ${res.status}: ${body}`);
+  return JSON.parse(body);
+}
+
+function startServer(clientId, clientSecret) {
   return new Promise((resolve, reject) => {
+    let redirectUri;
     const server = http.createServer(async (req, res) => {
       try {
         const u = new URL(req.url, `http://127.0.0.1`);
@@ -38,7 +57,7 @@ function startServer(oAuth2Client) {
           res.writeHead(400); res.end('no code'); return;
         }
         const code = u.searchParams.get('code');
-        const { tokens } = await oAuth2Client.getToken(code);
+        const tokens = await exchangeCode(code, clientId, clientSecret, redirectUri);
         if (!tokens.refresh_token) {
           res.writeHead(500); res.end('No refresh_token returned. Revoke access at myaccount.google.com and retry.');
           reject(new Error('no refresh_token (likely re-consent needed; revoke and retry)'));
@@ -56,25 +75,49 @@ function startServer(oAuth2Client) {
     server.on('error', reject);
     server.listen(0, '127.0.0.1', () => {
       const port = server.address().port;
-      const redirectUri = `http://127.0.0.1:${port}/`;
-      oAuth2Client.redirectUri = redirectUri;
-      const url = oAuth2Client.generateAuthUrl({
+      redirectUri = `http://127.0.0.1:${port}/`;
+      const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: SCOPES.join(' '),
         access_type: 'offline',
-        prompt: 'consent',
-        scope: SCOPES,
+        prompt: 'select_account consent',
       });
       console.log('\nOpen this URL in a browser signed in as the YouTube channel owner:\n');
       console.log(url);
+      console.log('\nWATCH FOR a channel picker — if your Google account owns multiple YouTube channels,');
+      console.log('Google will ask which channel to grant access to. Pick the right one carefully.');
       console.log(`\nAfter approving, Google will redirect to ${redirectUri} — this process will catch it.\n`);
     });
   });
 }
 
+async function verifyChannel(accessToken) {
+  const res = await fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true', {
+    headers: { Authorization: 'Bearer ' + accessToken, 'Accept-Encoding': 'identity' },
+  });
+  const data = await res.json();
+  if (!data.items || !data.items.length) throw new Error('channels.list returned no items: ' + JSON.stringify(data));
+  return data.items.map((ch) => ({
+    id: ch.id,
+    title: ch.snippet.title,
+    handle: ch.snippet.customUrl || null,
+    subscribers: ch.statistics.subscriberCount,
+    videos: ch.statistics.videoCount,
+  }));
+}
+
 (async () => {
   const { client_id, client_secret } = loadClientSecret();
-  const oAuth2Client = new google.auth.OAuth2(client_id, client_secret);
-  const tokens = await startServer(oAuth2Client);
+  const tokens = await startServer(client_id, client_secret);
   fs.mkdirSync(CFG_DIR, { recursive: true });
   fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokens, null, 2), { mode: 0o600 });
   console.log(`Wrote ${TOKEN_FILE}`);
+  const channels = await verifyChannel(tokens.access_token);
+  console.log('\n=== Bound YouTube channel(s) ===');
+  for (const ch of channels) {
+    console.log(`  ${ch.title}  (id=${ch.id}, handle=${ch.handle || '-'}, subs=${ch.subscribers}, videos=${ch.videos})`);
+  }
+  console.log('\nIf this is not "nocapflip", re-run `node auth.js` and pick the right channel on the picker.');
 })().catch((e) => { console.error(e); process.exit(1); });
