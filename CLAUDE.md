@@ -28,11 +28,11 @@ GitHub `malepatip/nocapflip` -> Cloudflare Workers Builds (static assets). `wran
 - Player names and room fields come from Firestore and are attacker-controlled: never put them into innerHTML unescaped (use `esc()` from data.js, or textContent).
 - Room read-modify-writes (join, leave, scoring a throw) go through `roomTxn()` (Firestore transaction), never get-then-update.
 - The last video stays in `REC.blob` until the next recording finishes; `recStart` must not discard it. End-screen buttons ask before moving on with an unsaved video.
-- `firestore.rules` is not deployed by the push: paste it into Firebase console, Firestore, Rules, and Publish.
+- `firestore.rules` deploys via `firebase deploy --only firestore:rules` (project `nocapflip-64f0a`); the Cloudflare push does not touch it (and `.assetsignore` keeps it out of the bundle).
+- Firestore writes need an authenticated Firebase user: `net.js` calls `firebase.auth().signInAnonymously()` on load; rooms carry a `playerIds` array mirroring `players[].id` so rules can check `request.auth.uid in playerIds` or `== host`.
 - Do not put JS lines mentioning "firebase-config.js" into index.html by scripted filtering (it once leaked raw code onto the page).
 
 ## Open items
 - Verify the live site has the latest net.js and index.html (fixes for host rejoin, copy/share, no pagehide close); test two real phones with a fresh table.
 - Owner to restrict the Firebase browser key in Google Cloud (HTTP referrers nocapflip.com, plus Cloud Firestore API only) and dismiss the GitHub secret-scanning alert (public web key, by design).
-- Firebase Anonymous Auth (owner enables it in the console) so rules can tie writes to `request.auth.uid`; until then anyone can still edit a live table's turn/points.
 - Ideas offered: 1200x630 social preview image; more venues (bus, science lab, locker room, main office); per-turn shot clock.
