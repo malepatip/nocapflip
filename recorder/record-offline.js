@@ -79,7 +79,7 @@ async function playOne({ url, outDir, longForm }) {
 
     let throws = 0;
     const matchStart = Date.now();
-    const MAX_MATCH_MS = 300000;
+    const MAX_MATCH_MS = longForm ? 900000 : 300000;
     while (Date.now() - matchStart < MAX_MATCH_MS) {
       const doneState = await page.evaluate(() => ({ done: !window.M || window.M.done === true, pts: (window.M||{}).pts, seq: (window.M||{}).seq }));
       if (doneState.done) { console.log('[loop] M.done pts=', doneState.pts); break; }
@@ -113,8 +113,8 @@ async function playOne({ url, outDir, longForm }) {
     }
     console.log('[match] loop ended, throws=', throws);
 
-    await page.waitForFunction(() => window.M && window.M.done === true, undefined, { timeout: 15000, polling: 200 });
-    await page.waitForFunction(() => window.REC && window.REC.blob && !window.REC.rec, undefined, { timeout: 30000, polling: 300 });
+    await page.waitForFunction(() => window.M && window.M.done === true, undefined, { timeout: longForm ? 120000 : 15000, polling: 200 });
+    await page.waitForFunction(() => window.REC && window.REC.blob && !window.REC.rec, undefined, { timeout: longForm ? 180000 : 30000, polling: 300 });
 
     const result = await page.evaluate(async () => {
       const b = window.REC.blob;
