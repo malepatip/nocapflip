@@ -192,12 +192,14 @@ async function playOne({ apiKey, url, outDir }) {
     ];
     const title = titles[Math.floor(Math.random() * titles.length)].slice(0, 100);
     const description = [
-      `${a} vs ${b} — a water-bottle-flip game at nocapflip.com.`,
-      `Venue: ${venueName}. Surface: ${stageName}. First to ${result.goal} wins. Final score: ${a} ${result.pts[0]}, ${b} ${result.pts[1]}. ${winner} wins.`,
+      `🎮 Play No Cap Flip free in your browser → https://nocapflip.com`,
       ``,
-      `🎮 Play yourself: https://nocapflip.com`,
+      `${a} vs ${b} on ${stageName} in ${venueName}. First to ${result.goal}. Final: ${a} ${result.pts[0]} – ${result.pts[1]} ${b}. ${winner} takes the W.`,
       ``,
-      `#nocapflip #bottleflip #shorts #gaming #physics #browsergame #indiegame #bottleflipchallenge #schoolgames`,
+      `Which school venue should we add next? Drop it in the comments 👇`,
+      `Subscribe for daily bottle-flip battles.`,
+      ``,
+      `#Shorts #nocapflip #bottleflip #bottleflipchallenge #gaming #physicsgame #browsergame #schoolgames #indiegame`,
     ].join('\n');
     const tags = [
       'nocapflip', 'bottle flip', 'bottleflip', 'bottle flip challenge', 'shorts',

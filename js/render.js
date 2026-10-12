@@ -282,7 +282,52 @@ function render() {
   drawBottle(p.x, p.y, p.a, p.skin);
   if (R.state === 'idle') drawAim();
   ctx.restore();
+  drawScoreHUD();
   drawStamps(); drawSlate();
+}
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath(); c.moveTo(x + r, y); c.lineTo(x + w - r, y); c.quadraticCurveTo(x + w, y, x + w, y + r);
+  c.lineTo(x + w, y + h - r); c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  c.lineTo(x + r, y + h); c.quadraticCurveTo(x, y + h, x, y + h - r);
+  c.lineTo(x, y + r); c.quadraticCurveTo(x, y, x + r, y); c.closePath();
+}
+function drawScoreHUD() {
+  if (typeof M === 'undefined' || !M || !M.players || !M.players.length || M.done) return;
+  if (R.slate) return;
+  var pad = 12, cw = NC.W, y = 24;
+  if (M.players.length === 2) {
+    var h = 60;
+    ctx.save();
+    ctx.globalAlpha = 0.9; ctx.fillStyle = '#1e2a23';
+    roundRect(ctx, pad, y, cw - pad * 2, h, 14); ctx.fill();
+    ctx.globalAlpha = 1;
+    var left = (M.players[0].name || '').toUpperCase().slice(0, 10);
+    var right = (M.players[1].name || '').toUpperCase().slice(0, 10);
+    ctx.textBaseline = 'middle';
+    ctx.font = '24px "Luckiest Guy", "Arial Black", Impact, sans-serif';
+    ctx.textAlign = 'left'; ctx.fillStyle = M.turn === 0 ? '#f4b41b' : '#fbf7ec';
+    ctx.fillText(left, pad + 16, y + h / 2, 150);
+    ctx.textAlign = 'right'; ctx.fillStyle = M.turn === 1 ? '#f4b41b' : '#fbf7ec';
+    ctx.fillText(right, cw - pad - 16, y + h / 2, 150);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#fbf7ec';
+    ctx.font = '32px "Luckiest Guy", "Arial Black", Impact, sans-serif';
+    ctx.fillText(M.pts[0] + ' – ' + M.pts[1], cw / 2, y + h / 2, 160);
+    ctx.restore();
+  } else {
+    var rowH = 22, h2 = M.players.length * rowH + 16;
+    ctx.save();
+    ctx.globalAlpha = 0.9; ctx.fillStyle = '#1e2a23';
+    roundRect(ctx, pad, y, 200, h2, 12); ctx.fill();
+    ctx.globalAlpha = 1; ctx.textBaseline = 'middle';
+    ctx.font = '16px "Luckiest Guy", "Arial Black", Impact, sans-serif';
+    M.players.forEach(function (pl, i) {
+      ctx.fillStyle = i === M.turn ? '#f4b41b' : '#fbf7ec';
+      var ry = y + 10 + i * rowH + rowH / 2 - 4;
+      ctx.textAlign = 'left'; ctx.fillText((pl.name || '').toUpperCase().slice(0, 10), pad + 12, ry, 130);
+      ctx.textAlign = 'right'; ctx.fillText(String(M.pts[i]), pad + 190, ry, 30);
+    });
+    ctx.restore();
+  }
 }
 
 /* ---------- stamps and slates, drawn on the canvas so they are in the video ---------- */
@@ -310,18 +355,25 @@ function drawStamps() {
     ctx.restore();
   });
 }
-function slate(label, title, line, ms) { R.slate = { label: label, title: title, line: line, until: performance.now() + ms, t0: performance.now() }; }
+function slate(label, title, line, ms, cta) { R.slate = { label: label, title: title, line: line, cta: cta || null, until: performance.now() + ms, t0: performance.now() }; }
 function wrapLines(text, size, maxW) { ctx.font = size + 'px "Luckiest Guy", "Arial Black", Impact, sans-serif'; var words = text.split(' '), lines = [], cur = ''; words.forEach(function (w) { var t = cur ? cur + ' ' + w : w; if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; }); if (cur) lines.push(cur); return lines; }
 function drawSlate() {
   var sl = R.slate; if (!sl) return; var now = performance.now(); if (now > sl.until) { R.slate = null; return; }
   var a = Math.min(1, (now - sl.t0) / 250, (sl.until - now) / 250);
   ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = 'rgba(30,42,35,.6)'; ctx.fillRect(0, 0, NC.W, NC.H);
-  var lines = wrapLines(sl.title, 46, 400), h = 150 + lines.length * 50 + (sl.line ? 40 : 0);
+  var lines = wrapLines(sl.title, 46, 400), ctaH = sl.cta ? 72 : 0;
+  var h = 150 + lines.length * 50 + (sl.line ? 40 : 0) + ctaH;
   ctx.translate(270, 440); ctx.rotate(-0.012); ctx.fillStyle = '#1e2a23'; ctx.fillRect(-224, -h / 2 + 8, 448, h); ctx.fillStyle = '#fbf7ec'; ctx.fillRect(-230, -h / 2, 448, h);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#d9342b'; ctx.font = '18px "Luckiest Guy", "Arial Black", sans-serif'; ctx.fillText(sl.label, -6, -h / 2 + 40, 400);
   ctx.fillStyle = '#1e2a23'; ctx.font = '46px "Luckiest Guy", "Arial Black", Impact, sans-serif'; lines.forEach(function (l, i) { ctx.fillText(l, -6, -h / 2 + 95 + i * 50, 420); });
   if (sl.line) { ctx.fillStyle = '#5a6a5f'; ctx.font = '600 18px Fredoka, sans-serif'; ctx.fillText(sl.line, -6, -h / 2 + 95 + lines.length * 50 + 10, 420); }
-  ctx.fillStyle = '#f4b41b'; ctx.font = '16px "Luckiest Guy", "Arial Black", sans-serif'; ctx.fillText('NO CAP · the unofficial sport of the lunch table', -6, h / 2 - 26, 420);
+  if (sl.cta) {
+    var ctaY = h / 2 - 58;
+    ctx.fillStyle = '#d9342b'; ctx.font = '28px "Luckiest Guy", "Arial Black", sans-serif'; ctx.fillText(sl.cta.url || 'nocapflip.com', -6, ctaY, 420);
+    ctx.fillStyle = '#f4b41b'; ctx.font = '20px "Luckiest Guy", "Arial Black", sans-serif'; ctx.fillText(sl.cta.action || 'SUBSCRIBE', -6, ctaY + 28, 420);
+  } else {
+    ctx.fillStyle = '#f4b41b'; ctx.font = '16px "Luckiest Guy", "Arial Black", sans-serif'; ctx.fillText('NO CAP · the unofficial sport of the lunch table', -6, h / 2 - 26, 420);
+  }
   ctx.restore();
 }
 

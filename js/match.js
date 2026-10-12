@@ -191,7 +191,7 @@ function endMatch(w) {
   $('btnNext').hidden = !(M.mode === 'ladder' && mine && nk >= 0); $('btnNext').textContent = nk >= 0 ? 'Next: ' + KIDS[nk].name : '';
   $('btnAgain').hidden = M.mode === 'link' && !M.host; $('btnAgain').textContent = M.mode === 'tape' ? 'Play it again' : M.mode === 'link' ? 'Run it back (new table, same link rules)' : 'Run it back';
   $('btnToTable').textContent = M.mode === 'ladder' ? 'Back to the table' : M.mode === 'link' && !M.host ? 'Leave (the host can start a rematch)' : 'Home';
-  slate($('endLabel').textContent, $('endTitle').textContent, 'final ' + M.pts.join('–') + (delta ? ' · ' + (delta > 0 ? '+' : '') + fmt(delta) + ' aura' : ''), 2600);
+  slate($('endLabel').textContent, $('endTitle').textContent, 'final ' + M.pts.join('–') + (delta ? ' · ' + (delta > 0 ? '+' : '') + fmt(delta) + ' aura' : ''), 2600, { url: 'nocapflip.com', action: 'SUBSCRIBE for more' });
   var recording = !!REC.rec; $('btnSave').hidden = !recording; $('endVideo').hidden = !recording; if (recording) { $('endVideo').textContent = 'Recording the end card… the video is ready in a few seconds.'; var mid = M.id; setTimeout(function () { if (M && M.id === mid) recStop(false); }, 2700); }
   hideSheets(); $('sheetEnd').hidden = false;
 }

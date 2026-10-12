@@ -79,7 +79,13 @@ async function refreshAccessToken() {
 async function uploadVideoResumable(accessToken, mp4Path, meta, privacyStatus) {
   const stat = fs.statSync(mp4Path);
   // Step 1: initiate resumable upload — small POST, metadata only.
-  const init = await fetch('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status', {
+  const title = meta.title.includes('#Shorts') || meta.title.includes('#shorts')
+    ? meta.title
+    : (meta.title + ' #Shorts').slice(0, 100);
+  const recordingDate = meta.match && meta.match.recordedAt
+    ? meta.match.recordedAt
+    : (meta.recordedAt || new Date().toISOString());
+  const init = await fetch('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status,recordingDetails', {
     method: 'POST',
     headers: {
       Authorization: 'Bearer ' + accessToken,
@@ -90,16 +96,19 @@ async function uploadVideoResumable(accessToken, mp4Path, meta, privacyStatus) {
     },
     body: JSON.stringify({
       snippet: {
-        title: meta.title,
+        title,
         description: meta.description,
         tags: meta.tags,
         categoryId: CATEGORY_GAMING,
+        defaultLanguage: 'en',
+        defaultAudioLanguage: 'en',
       },
       status: {
         privacyStatus,
         selfDeclaredMadeForKids: !!meta.madeForKids,
         embeddable: true,
       },
+      recordingDetails: { recordingDate },
     }),
   });
   if (!init.ok) throw new Error(`init ${init.status}: ${await init.text()}`);
@@ -185,7 +194,11 @@ async function uploadOne(accessToken, mp4Path, opts) {
       const msg = e.message || String(e);
       console.error(`[fail] ${path.basename(t)} — ${msg.slice(0, 400)}`);
       if (/quotaExceeded/i.test(msg) || /quota/i.test(msg)) {
-        console.error('quota exhausted; stopping.');
+        console.error('API quota exhausted; stopping.');
+        break;
+      }
+      if (/uploadLimitExceeded/i.test(msg) || /exceeded the number of videos/i.test(msg)) {
+        console.error('channel upload rate limit hit — verify the channel at youtube.com/verify to raise it. stopping.');
         break;
       }
     }
