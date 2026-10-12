@@ -116,26 +116,38 @@ async function playOne({ url, outDir, longForm }) {
     await page.waitForFunction(() => window.M && window.M.done === true, undefined, { timeout: longForm ? 120000 : 15000, polling: 200 });
     await page.waitForFunction(() => window.REC && window.REC.blob && !window.REC.rec, undefined, { timeout: longForm ? 180000 : 30000, polling: 300 });
 
-    const result = await page.evaluate(async () => {
-      const b = window.REC.blob;
-      const buf = await b.arrayBuffer();
-      const u = new Uint8Array(buf);
-      let s = ''; const CH = 0x8000;
-      for (let i = 0; i < u.length; i += CH) s += String.fromCharCode.apply(null, u.subarray(i, i + CH));
-      return {
-        mime: b.type, size: b.size, b64: btoa(s),
-        pts: (window.M.pts||[]).slice(), players: (window.M.players||[]).map(p=>p.name),
-        venue: (window.M||{}).venue, stage: (window.M||{}).stageId, goal: (window.M||{}).goal,
-        audio: (window.S||{}).audio, duration_s: (window.REC||{}).secs || null,
-      };
-    });
+    // Fetch metadata and blob size first (small payload)
+    const result = await page.evaluate(() => ({
+      mime: (window.REC.blob||{}).type || '',
+      size: (window.REC.blob||{}).size || 0,
+      pts: (window.M.pts||[]).slice(), players: (window.M.players||[]).map(p=>p.name),
+      venue: (window.M||{}).venue, stage: (window.M||{}).stageId, goal: (window.M||{}).goal,
+      audio: (window.S||{}).audio, duration_s: (window.REC||{}).secs || null,
+    }));
+    if (!result || !result.size) throw new Error('REC.blob missing or empty after match');
+
+    // Transfer blob in 8 MB chunks to avoid CDP message size limits on large recordings
+    const CHUNK = 8 * 1024 * 1024;
+    const b64Chunks = [];
+    for (let offset = 0; offset < result.size; offset += CHUNK) {
+      const b64 = await page.evaluate(async ([off, len]) => {
+        const slice = window.REC.blob.slice(off, off + len);
+        const buf = await slice.arrayBuffer();
+        const u = new Uint8Array(buf);
+        let s = ''; const CH = 0x8000;
+        for (let i = 0; i < u.length; i += CH) s += String.fromCharCode.apply(null, u.subarray(i, i + CH));
+        return btoa(s);
+      }, [offset, Math.min(CHUNK, result.size - offset)]);
+      b64Chunks.push(b64);
+      console.log(`[blob] chunk ${b64Chunks.length} offset=${offset} size=${result.size}`);
+    }
 
     const ext = /webm/.test(result.mime) ? 'webm' : /mp4/.test(result.mime) ? 'mp4' : 'webm';
     const base = `nocap-${stamp()}-${names[0]}-vs-${names[1]}-${result.pts.join('-')}`;
     const file = path.join(outDir, base + '.' + ext);
     const jsonFile = path.join(outDir, base + '.json');
     fs.mkdirSync(outDir, { recursive: true });
-    fs.writeFileSync(file, Buffer.from(result.b64, 'base64'));
+    fs.writeFileSync(file, Buffer.concat(b64Chunks.map(c => Buffer.from(c, 'base64'))));
 
     const [a, b] = names;
     const winnerIdx = (result.pts[0] >= result.goal) ? 0 : (result.pts[1] >= result.goal ? 1 : (result.pts[0] > result.pts[1] ? 0 : 1));
