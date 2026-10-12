@@ -6,7 +6,7 @@ set -u
 N="${1:-1}"
 OUT_DIR="${OUT_DIR:-/sdcard/Download}"
 
-proot-distro login debian -- bash -c "cd /root/recorder && OUT_DIR='$OUT_DIR' N='$N' CONCURRENCY='${CONCURRENCY:-1}' node record-offline.js" || true
+proot-distro login debian -- bash -c "cd /root/recorder && OUT_DIR='$OUT_DIR' N='$N' CONCURRENCY='${CONCURRENCY:-1}' LONG_FORM='${LONG_FORM:-}' node record-offline.js" || true
 
 # Post-processing: transcode webm → mp4 and extract thumbnails.
 command -v ffmpeg >/dev/null 2>&1 || { echo "ffmpeg not installed; skipping transcode + thumbnails"; exit 0; }
