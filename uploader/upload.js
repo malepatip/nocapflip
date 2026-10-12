@@ -35,6 +35,7 @@ function parseArgs(argv) {
     else if (a.startsWith('--dir=')) out.dir = a.slice(6);
     else if (a.startsWith('--privacy=')) out.privacy = a.slice(10);
     else if (a.startsWith('--limit=')) out.limit = parseInt(a.slice(8), 10);
+    else if (a === '--long') out.long = true;
     else { console.error(`unknown arg: ${a}`); process.exit(2); }
   }
   return out;
@@ -45,14 +46,19 @@ function sidecarsFor(mp4Path) {
   return { json: `${base}.json`, thumb: `${base}.jpg`, marker: `${base}.youtube.json` };
 }
 
-function listPending(dir) {
+function listPending(dir, opts = {}) {
   if (!fs.existsSync(dir)) { console.error(`dir not found: ${dir}`); process.exit(1); }
   return fs.readdirSync(dir)
     .filter((f) => f.endsWith('.mp4'))
     .map((f) => path.join(dir, f))
     .filter((p) => {
       const s = sidecarsFor(p);
-      return fs.existsSync(s.json) && !fs.existsSync(s.marker);
+      if (!fs.existsSync(s.json) || fs.existsSync(s.marker)) return false;
+      if (opts.long) {
+        const meta = JSON.parse(fs.readFileSync(s.json, 'utf8'));
+        return meta.shorts === false;
+      }
+      return true;
     });
 }
 
@@ -79,8 +85,9 @@ async function refreshAccessToken() {
 async function uploadVideoResumable(accessToken, mp4Path, meta, privacyStatus) {
   const stat = fs.statSync(mp4Path);
   // Step 1: initiate resumable upload — small POST, metadata only.
-  const title = meta.title.includes('#Shorts') || meta.title.includes('#shorts')
-    ? meta.title
+  const isShort = meta.shorts !== false;
+  const title = (!isShort || meta.title.includes('#Shorts') || meta.title.includes('#shorts'))
+    ? meta.title.slice(0, 100)
     : (meta.title + ' #Shorts').slice(0, 100);
   const recordingDate = meta.match && meta.match.recordedAt
     ? meta.match.recordedAt
@@ -176,7 +183,7 @@ async function uploadOne(accessToken, mp4Path, opts) {
 
 (async () => {
   const opts = parseArgs(process.argv);
-  const targets = opts.file ? [opts.file] : listPending(opts.dir);
+  const targets = opts.file ? [opts.file] : listPending(opts.dir, opts);
   if (!targets.length) { console.log('nothing to upload'); return; }
   console.log(`${targets.length} file(s) to ${opts.dryRun ? 'process' : 'upload'} from ${opts.file ? 'arg' : opts.dir}`);
 

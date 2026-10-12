@@ -13,7 +13,7 @@ const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 
-async function playOne({ url, outDir }) {
+async function playOne({ url, outDir, longForm }) {
   const browser = await firefox.launch({ headless: true });
   try {
     const ctx = await browser.newContext({ viewport: { width: 540, height: 960 } });
@@ -57,13 +57,13 @@ async function playOne({ url, outDir }) {
     const names = [pick(FIRST_NAMES), pick(FIRST_NAMES)];
     while (names[1] === names[0]) names[1] = pick(FIRST_NAMES);
 
-    const cfg = await page.evaluate((names) => {
+    const cfg = await page.evaluate(([names, longForm]) => {
       const venues = ['cafeteria','classroom','restroom','gym','hallway','outside'];
       const stages = ['table','table','table','tray'];
       const skinKeys = Object.keys(window.SKINS);
       const venue = venues[Math.floor(Math.random()*venues.length)];
       const stage = stages[Math.floor(Math.random()*stages.length)];
-      const goal  = [2, 3][Math.floor(Math.random()*2)];
+      const goal  = longForm ? [7, 10][Math.floor(Math.random()*2)] : [2, 3][Math.floor(Math.random()*2)];
       const skinA = skinKeys[Math.floor(Math.random()*skinKeys.length)];
       const skinB = skinKeys[Math.floor(Math.random()*skinKeys.length)];
       window.openMatch({
@@ -72,7 +72,7 @@ async function playOne({ url, outDir }) {
       });
       document.getElementById('btnStart').click();
       return { venue, stage, goal, skinA, skinB };
-    }, names);
+    }, [names, longForm]);
     console.log('[match]', names.join(' vs '), cfg);
 
     await page.waitForFunction(() => window.M && !window.M.done && (window.inputEnabled || window.M.busy), { timeout: 15000 });
@@ -144,7 +144,7 @@ async function playOne({ url, outDir }) {
     const scoreW   = `${result.pts[winnerIdx]}–${result.pts[1-winnerIdx]}`;
     const venueName = { cafeteria: 'the cafeteria', classroom: 'the classroom', restroom: 'the restroom', gym: 'the gym', hallway: 'the hallway', outside: 'outside' }[result.venue] || result.venue;
     const stageName = { table: 'the lunch table', tray: 'a lunch tray', books: 'a stack of textbooks', stool: 'a stool' }[result.stage] || result.stage;
-    const titles = [
+    const shortTitles = [
       `${winner} cooks ${loser} ${scoreW} on ${stageName} 🧢`,
       `No Cap bottle flip: ${a} vs ${b} in ${venueName}`,
       `${winner} wins ${scoreW} — flipping on ${stageName} #shorts`,
@@ -154,8 +154,25 @@ async function playOne({ url, outDir }) {
       `Bottle flip faceoff: ${scoreRaw} final · ${venueName}`,
       `${winner} is him. ${scoreW} on ${stageName}.`,
     ];
+    const longTitles = [
+      `${a} vs ${b} — First to ${result.goal} Bottle Flip Battle (${scoreRaw}) in ${venueName}`,
+      `${winner} Wins ${scoreW} in an Epic Bottle Flip Match | No Cap Flip`,
+      `Full Match: ${a} vs ${b} on ${stageName} — First to ${result.goal} | No Cap Flip`,
+      `${winner} Cooks ${loser} First to ${result.goal} | Bottle Flip Battle ${venueName}`,
+      `${a} vs ${b}: Complete Bottle Flip Battle — ${scoreRaw} Final`,
+    ];
+    const titles = longForm ? longTitles : shortTitles;
     const title = titles[Math.floor(Math.random() * titles.length)].slice(0, 100);
-    const description = [
+    const description = longForm ? [
+      `🎮 Play No Cap Flip free in your browser → https://nocapflip.com`,
+      ``,
+      `Full bottle flip battle: ${a} vs ${b} on ${stageName} in ${venueName}. First to ${result.goal} wins. Final score: ${a} ${result.pts[0]} – ${result.pts[1]} ${b}. ${winner} takes the W.`,
+      ``,
+      `Subscribe for daily bottle-flip battles 👇`,
+      `Which school venue should we add next? Drop it in the comments!`,
+      ``,
+      `#nocapflip #bottleflip #bottleflipchallenge #gaming #physicsgame #browsergame #schoolgames #indiegame`,
+    ].join('\n') : [
       `🎮 Play No Cap Flip free in your browser → https://nocapflip.com`,
       ``,
       `${a} vs ${b} on ${stageName} in ${venueName}. First to ${result.goal}. Final: ${a} ${result.pts[0]} – ${result.pts[1]} ${b}. ${winner} takes the W.`,
@@ -165,7 +182,12 @@ async function playOne({ url, outDir }) {
       ``,
       `#Shorts #nocapflip #bottleflip #bottleflipchallenge #gaming #physicsgame #browsergame #schoolgames #indiegame`,
     ].join('\n');
-    const tags = [
+    const tags = longForm ? [
+      'nocapflip', 'bottle flip', 'bottleflip', 'bottle flip challenge',
+      result.venue, 'school game', 'browser game', 'physics game',
+      'gen z', 'gaming', 'indie game', winner.toLowerCase(), loser.toLowerCase(),
+      'no cap', result.audio === 'clean' ? 'wah wah' : 'fart sounds',
+    ].slice(0, 15) : [
       'nocapflip', 'bottle flip', 'bottleflip', 'bottle flip challenge', 'shorts',
       result.venue, 'cafeteria flip', 'school game', 'browser game', 'physics game',
       'gen z', 'gaming', 'indie game', winner.toLowerCase(), loser.toLowerCase(),
@@ -175,7 +197,7 @@ async function playOne({ url, outDir }) {
     const sidecar = {
       file: path.basename(file),
       title, description, tags,
-      category: 'Gaming', privacyStatus: 'public', madeForKids: false, shorts: true,
+      category: 'Gaming', privacyStatus: 'public', madeForKids: false, shorts: !longForm,
       match: {
         players: names, winner, winnerIdx,
         pts: result.pts, scoreRaw, scoreW,
@@ -196,13 +218,14 @@ async function playOne({ url, outDir }) {
   const url = process.env.NOCAP_URL || 'https://nocapflip.com';
   const outDir = process.env.OUT_DIR || '/sdcard/Download';
   const n = parseInt(process.env.N || process.argv[2] || '1', 10);
+  const longForm = !!process.env.LONG_FORM;
   const concurrency = Math.max(1, Math.min(3, parseInt(process.env.CONCURRENCY || '1', 10)));  // Firefox is heavier; default 1
   let next = 0, saved = 0;
   async function worker(id) {
     while (true) {
       const i = next++; if (i >= n) return;
       console.log(`\n=== game ${i+1} / ${n} [w${id}] ===`);
-      try { await playOne({ url, outDir }); saved++; }
+      try { await playOne({ url, outDir, longForm }); saved++; }
       catch (e) { console.error(`[game ${i+1}] failed:`, e && e.stack || e); }
     }
   }
