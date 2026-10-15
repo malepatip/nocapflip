@@ -61,7 +61,7 @@ Env knobs (also work with `run-offline.sh` directly; offline recorder only):
 | `STAGE` | random classic (`hang` in `long.sh`) | `hang` = Cut the bottle |
 | `GOAL` | long: 7 or 10, short: 2 (hang) | first-to-N stacks |
 | `CUT_RATE` | 0.1 | per-turn chance the bot stalls so the chainsaw cuts the rope (drama) |
-| `HANG_SIGMA` | 0.045 | aim noise on the hang stage; smaller = more stacks = shorter video |
+| `HANG_SIGMA` | 0.035 | aim noise on the hang stage; smaller = more stacks = shorter video |
 | `PRIVACY` | public (`long.sh`: unlisted) | written to the sidecar; `upload.js --privacy=` overrides |
 
 - The bot plays hang matches by throwing at `IDEAL.hang` with gaussian noise, lets the chainsaw win now and then, and counts outcomes via a wrapper on `onOutcome` (stacks, cuts, wrong, flops). The counts go in the sidecar (`match.stats`) and the YouTube description.
