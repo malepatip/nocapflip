@@ -456,17 +456,30 @@ function hangLower(done) {
   h.lower = { t0: performance.now(), ms: 900, to: capTop - NC.STAGES.hang.hang.capBottom, done: done };
 }
 /* a flying bottle that clips the hanger sets it swinging a little (visual only; the stack check stays static) */
+/* rotated rectangle (centre, angle, w, h) against an axis-aligned one: separating-axis test */
+function rectHitsAABB(cx, cy, ang, w, h, x0, y0, x1, y1) {
+  var c = Math.cos(ang), s = Math.sin(ang), hw = w / 2, hh = h / 2;
+  var ex = Math.abs(c) * hw + Math.abs(s) * hh, ey = Math.abs(s) * hw + Math.abs(c) * hh;
+  var ax = (x0 + x1) / 2, ay = (y0 + y1) / 2, ahw = (x1 - x0) / 2, ahh = (y1 - y0) / 2;
+  if (Math.abs(cx - ax) > ex + ahw || Math.abs(cy - ay) > ey + ahh) return false;
+  var dx = ax - cx, dy = ay - cy, px = dx * c + dy * s, py = -dx * s + dy * c;
+  return Math.abs(px) <= hw + ahw * Math.abs(c) + ahh * Math.abs(s) && Math.abs(py) <= hh + ahw * Math.abs(s) + ahh * Math.abs(c);
+}
 function hangPoke(now) {
-  var h = R.hang, pos = null;
-  if (R.state === 'flight' && R.thr) { var b = R.thr.bottle.parts[1]; pos = { x: b.position.x, y: b.position.y }; }
-  else if (R.state === 'replay' && R.replay && R.replay.trail.length) { var fr = R.replay.trail[Math.min(R.replay.trail.length - 1, Math.floor(R.replay.i))]; if (fr) pos = { x: fr[0], y: fr[1] }; }
+  var h = R.hang, pos = null, skin = R.skin;
+  if (R.state === 'flight' && R.thr) { var b = R.thr.bottle.parts[1]; pos = { x: b.position.x, y: b.position.y, a: R.thr.bottle.angle }; }
+  else if (R.state === 'replay' && R.replay && R.replay.trail.length) { var fr = R.replay.trail[Math.min(R.replay.trail.length - 1, Math.floor(R.replay.i))]; if (fr) { pos = { x: fr[0], y: fr[1], a: fr[2] }; skin = R.replay.skin; } }
   if (!pos) { h.prev = null; h.poked = false; return; }
-  var p = hangPos(), pr = h.prev; h.prev = pos;
+  var pr = h.prev; h.prev = pos;
   if (!pr || h.poked) return;
   var sp = Math.hypot(pos.x - pr.x, pos.y - pr.y);
-  if (Math.abs(pos.x - p.x) < 32 && pos.y > p.top - 34 && pos.y < p.cap + 34 && sp > 2.5) {
-    h.poked = true; h.swing = { t0: now, amp: Math.min(0.1, 0.02 + sp * 0.005), dir: pos.x < p.x ? 1 : -1 }; sfx('tick');
-  }
+  if (sp < 1.2) return;
+  /* real geometry: the thrown bottle's body and cap against the hanger's body and cap */
+  var p = hangPos(), hs = hangSpec(), s = NC.BOTTLES[SKINS[skin].type], d = s.h / 2 + s.capH / 2;
+  var capX = pos.x + d * Math.sin(pos.a), capY = pos.y - d * Math.cos(pos.a);
+  var hb = [p.x - hs.w / 2, p.top, p.x + hs.w / 2, p.cap - hs.capH], hc = [p.x - hs.capW / 2, p.cap - hs.capH, p.x + hs.capW / 2, p.cap];
+  var hit = [hb, hc].some(function (r) { return rectHitsAABB(pos.x, pos.y, pos.a, s.w, s.h, r[0], r[1], r[2], r[3]) || rectHitsAABB(capX, capY, pos.a, s.capW, s.capH, r[0], r[1], r[2], r[3]); });
+  if (hit) { h.poked = true; h.swing = { t0: now, amp: Math.min(0.12, 0.06 + sp * 0.005), dir: pos.x < p.x ? 1 : -1 }; sfx('tick'); }
 }
 function updateHang(now, dt) {
   var h = R.hang; if (!h) return;
@@ -501,7 +514,7 @@ function drawBlade(p) {
   var by = p.top - ROPE_BLADE_GAP, now = performance.now(), pr = R.cut.p;
   if (R.cut.snap) pr = Math.min(1, pr + (now - R.cut.snap) / 170 * (1 - pr));
   /* a chainsaw on a rail: guide bar pointing at the rope, chain running and the engine shaking while it creeps closer */
-  var dx = 60 * (1 - pr), sawing = R.cut.on || (R.cut.snap && now - R.cut.snap < 400), shake = sawing ? Math.sin(now / 15) * 1.2 : 0, phase = sawing ? (now / 10) % 7 : 0;
+  var dx = 60 * (1 - pr), shake = Math.sin(now / 15) * 1.2, phase = (now / 10) % 7; /* the chain always runs, even after the throw stops the countdown */
   ctx.save();
   ctx.strokeStyle = '#6c737b'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x - 6, by + 17); ctx.lineTo(p.x + 170, by + 17); ctx.stroke();
   ctx.translate(p.x - 2 + dx, by + shake);
