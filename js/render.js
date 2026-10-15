@@ -500,16 +500,22 @@ function updateHang(now, dt) {
 function drawBlade(p) {
   var by = p.top - ROPE_BLADE_GAP, now = performance.now(), pr = R.cut.p;
   if (R.cut.snap) pr = Math.min(1, pr + (now - R.cut.snap) / 170 * (1 - pr));
-  var dx = 130 * (1 - pr);
+  /* a jigsaw on a rail: blade pointing at the rope, sawing back and forth while it creeps closer */
+  var dx = 80 * (1 - pr), sawing = R.cut.on || (R.cut.snap && now - R.cut.snap < 400), ox = sawing ? Math.sin(now / 22) * 6 : 0;
   ctx.save();
-  ctx.strokeStyle = '#6c737b'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x - 6, by + 17); ctx.lineTo(p.x + 240, by + 17); ctx.stroke();
+  ctx.strokeStyle = '#6c737b'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x - 6, by + 17); ctx.lineTo(p.x + 170, by + 17); ctx.stroke();
   ctx.translate(p.x - 2 + dx, by);
-  ctx.fillStyle = '#cfd6dc'; ctx.strokeStyle = '#1e2a23'; ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.moveTo(0, -26); ctx.lineTo(72, -26); ctx.lineTo(72, 14); ctx.lineTo(0, 14); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(1, -24); ctx.lineTo(1, 12); ctx.stroke();
-  ctx.fillStyle = '#1e2a23'; ctx.beginPath(); ctx.arc(54, -6, 5, 0, 7); ctx.fill();
-  ctx.fillStyle = '#7a1f2b'; ctx.strokeStyle = '#1e2a23'; ctx.lineWidth = 2.5; rr(72, -16, 48, 20, 6); ctx.fill(); ctx.stroke();
-  if (R.cut.on) { var sec = Math.max(0, Math.ceil((R.cut.ms - (now - R.cut.t0)) / 1000)); ctx.font = '26px "Luckiest Guy", "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = sec <= 3 ? '#d9342b' : '#1e2a23'; ctx.fillText(String(sec), 96, -34); }
+  ctx.save(); ctx.translate(ox, 0); ctx.fillStyle = '#cfd6dc'; ctx.strokeStyle = '#1e2a23'; ctx.lineWidth = 1.5;
+  ctx.fillRect(0, -3, 56, 6); ctx.strokeRect(0, -3, 56, 6);
+  for (var ti = 0; ti < 8; ti++) { ctx.beginPath(); ctx.moveTo(ti * 7, 3); ctx.lineTo(ti * 7 + 3.5, 9); ctx.lineTo(ti * 7 + 7, 3); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  ctx.restore();
+  ctx.strokeStyle = '#1e2a23'; ctx.lineWidth = 2.5;
+  ctx.fillStyle = '#2b313a'; ctx.beginPath(); ctx.moveTo(62, -26); ctx.lineTo(66, -48); ctx.lineTo(98, -48); ctx.lineTo(102, -26); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#1f6fd0'; rr(54, -26, 50, 34, 8); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#f4b41b'; ctx.fillRect(58, -12, 42, 5);
+  ctx.fillStyle = '#d9342b'; ctx.fillRect(84, -26, 7, 10);
+  ctx.fillStyle = '#6c737b'; ctx.fillRect(46, -8, 10, 16); ctx.strokeRect(46, -8, 10, 16);
+  if (R.cut.on) { var sec = Math.max(0, Math.ceil((R.cut.ms - (now - R.cut.t0)) / 1000)); ctx.font = '26px "Luckiest Guy", "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = sec <= 3 ? '#d9342b' : '#1e2a23'; ctx.fillText(String(sec), 80, -56); }
   ctx.restore();
 }
 function drawHang() {

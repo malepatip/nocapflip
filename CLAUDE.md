@@ -35,7 +35,7 @@ GitHub `malepatip/nocapflip` -> Cloudflare Workers Builds (static assets). `wran
 - Do not put JS lines mentioning "firebase-config.js" into index.html by scripted filtering (it once leaked raw code onto the page).
 
 ## Cut the bottle (stage `hang`)
-- A bottle hangs cap-down over the table (`NC.STAGES.hang.hang`: x 350, capBottom 400, tol 20). Landing upright within tol of x is outcome `stack` (+1, same player goes again, rope lowers cap to cap); other landings are `wrong`/`flop`.
+- A bottle hangs cap-down over the table (`NC.STAGES.hang.hang`: x 350, capBottom 560, tol 20). Landing upright within tol of x is outcome `stack` (+1, same player goes again, rope lowers cap to cap); other landings are `wrong`/`flop`.
 - A blade timer (`CUT_MS` 12 s, match.js `cutStart`/`onCutExpire`, render.js `hangCutNow`) replaces the shot clock on this stage; expiry is outcome `cut` (turn lost, bottle drops and splashes). The timer stops when the throw is launched.
 - The hanger is a static Matter body; the swing when clipped is visual only (render.js `hangPoke`). `IDEAL.hang` was computed with `NC.searchIdeal('hang', ...)` in Node; recompute it if hang params or physics TUNE change.
 - Entry points: home `btnCut` -> `sheetCut` (vs kid = ladder mode with `practice: true`, 2P, link via `segStage` value `hang`). Link scoring/turn logic for `stack` is in net.js `netThrow`.

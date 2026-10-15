@@ -42,7 +42,7 @@
     stool: { table: [40, 250], target: 0, platforms: [
       { x: 262, y: 790, w: 112, h: 16, kind: 'stool' } ] },
     /* hang: a bottle hangs cap-down from the ceiling over the table. Land upright under it (cap under cap) to stack. */
-    hang:  { table: [40, 500], target: 'table', platforms: [], hang: { x: 350, capBottom: 400, tol: 20, bottle: 'water' } }
+    hang:  { table: [40, 500], target: 'table', platforms: [], hang: { x: 350, capBottom: 560, tol: 20, bottle: 'water' } }
   };
 
   function norm(a) { a = a % (2 * Math.PI); if (a > Math.PI) a -= 2 * Math.PI; if (a <= -Math.PI) a += 2 * Math.PI; return a; }
