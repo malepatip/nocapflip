@@ -279,16 +279,26 @@ function render() {
   R.camY += (target - R.camY) * 0.18; if (Math.abs(R.camY - target) < 0.4) R.camY = target;
   /* fill the strip exposed above the room by the camera pan with the venue's wall-top color */
   if (R.camY > 0) { ctx.fillStyle = VENUES[vn].wallTop || '#8fb49a'; ctx.fillRect(0, 0, NC.W, Math.ceil(R.camY) + 1); }
-  ctx.save(); ctx.translate(0, R.camY);
+  var shx = 0, shy = 0;
+  if (R.shake) { var sq = 1 - (performance.now() - R.shake.t0) / R.shake.ms; if (sq <= 0) R.shake = null; else { shx = (Math.random() - 0.5) * 2 * R.shake.amp * sq; shy = (Math.random() - 0.5) * 2 * R.shake.amp * sq; } }
+  ctx.save(); ctx.translate(shx, R.camY + shy);
   drawRoom(st); drawBoard(); if (st.hang) drawHang();
   drawShadow(p.x, p.y, NC.BOTTLES[SKINS[p.skin].type].h);
   drawBottle(p.x, p.y, p.a, p.skin);
   if (st.hang) drawSplash();
   if (R.state === 'idle') drawAim();
   ctx.restore();
+  if (R.flash) { var fq = 1 - (performance.now() - R.flash.t0) / R.flash.ms; if (fq <= 0) R.flash = null; else { ctx.save(); ctx.globalAlpha = 0.45 * fq; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, NC.W, NC.H); ctx.restore(); } }
   drawScoreHUD();
   drawStamps(); drawSlate();
 }
+/* fairness: a hidden tab (text message, app switch) must not eat the blade timer. Give the player back the lost time plus 1 s. */
+var hiddenAt = 0;
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'hidden') { hiddenAt = performance.now(); return; }
+  if (hiddenAt && R.cut.on) R.cut.t0 = Math.min(performance.now(), R.cut.t0 + (performance.now() - hiddenAt) + 1000);
+  hiddenAt = 0;
+});
 function roundRect(c, x, y, w, h, r) {
   c.beginPath(); c.moveTo(x + r, y); c.lineTo(x + w - r, y); c.quadraticCurveTo(x + w, y, x + w, y + r);
   c.lineTo(x + w, y + h - r); c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
@@ -423,10 +433,23 @@ function recLen() { var t = REC.secs || 0; return Math.floor(t / 60) + ':' + ('0
 /* ---------- hang stage: the hanging bottle, the cutter, the splash ---------- */
 var ROPE_TOP = -1500, ROPE_BLADE_GAP = 90;
 var onCutExpire = null;
-R.cut = { on: false, t0: 0, ms: 0, p: 0, snap: 0, sec: -1 }; R.splash = []; R.puddle = null; R.hang = null;
+R.cut = { on: false, t0: 0, ms: 0, p: 0, snap: 0, sec: -1 }; R.splash = []; R.puddle = null; R.hang = null; R.fx = []; R.shake = null; R.flash = null;
+var RM = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+/* screen shake / flash / confetti: visual only, never touches the sim. Keep them >= ~120 ms so the 30 fps recording catches them. */
+function shakeNow(amp, ms) { if (!RM) R.shake = { t0: performance.now(), ms: ms, amp: amp }; }
+function flashNow(ms) { if (!RM) R.flash = { t0: performance.now(), ms: ms }; }
+var CONFETTI = ['#f4b41b', '#d9342b', '#2a5bd7', '#2f9e5b', '#ffffff', '#b04fd6'];
+function confettiBurst(x, y, n) {
+  if (RM) n = Math.min(n, 20);
+  for (var i = 0; i < n; i++) {
+    var ang = -Math.PI * (0.05 + Math.random() * 0.9), sp = 3 + Math.random() * 9;
+    R.fx.push({ x: x, y: y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 2, r: 3 + Math.random() * 3, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.4, col: CONFETTI[i % CONFETTI.length], life: 90 + Math.random() * 40 });
+  }
+  if (R.fx.length > 140) R.fx.splice(0, R.fx.length - 140);
+}
 function hangSpec() { return NC.BOTTLES[NC.STAGES.hang.hang.bottle]; }
 function hangPos() { var st = NC.STAGES.hang.hang, s = hangSpec(), cb = st.capBottom + (R.hang ? R.hang.off : 0); return { x: st.x, cap: cb, y: cb - s.capH - s.h / 2, top: cb - s.capH - s.h }; }
-function hangReset(skin) { R.hang = { skin: skin || 'tap', off: 0, lower: null, fall: null, swing: null, prev: null, poked: false }; R.puddle = null; R.cut.on = false; R.cut.p = 0; R.cut.snap = 0; }
+function hangReset(skin) { R.hang = { skin: skin || 'tap', off: 0, lower: null, fall: null, swing: null, prev: null, poked: false }; R.puddle = null; R.fx = []; R.cut.on = false; R.cut.p = 0; R.cut.snap = 0; }
 hangReset();
 function cutStart(ms) { R.cut.on = true; R.cut.t0 = performance.now(); R.cut.ms = ms; R.cut.p = 0; R.cut.snap = 0; R.cut.sec = -1; }
 function cutStop() { R.cut.on = false; }
@@ -445,7 +468,7 @@ function hangCutNow(done) {
   var p = hangPos();
   setTimeout(function () {
     if (!R.hang || R.hang !== h) { if (done) done(); return; }
-    h.fall = { x: p.x, y0: p.y, y: p.y, vy: 0, rot: Math.PI, done: done }; spawnDrops(p.x, p.y, 28, 0.7);
+    h.fall = { x: p.x, y0: p.y, y: p.y, vy: 0, rot: Math.PI, done: done }; spawnDrops(p.x, p.y, 18, 0.7); shakeNow(3, 150);
   }, 170);
 }
 /* after a stack: the rope pays out until the two caps touch */
@@ -485,14 +508,22 @@ function updateHang(now, dt) {
   var h = R.hang; if (!h) return;
   var k = dt / NC.STEP;
   if (!h.fall) hangPoke(now);
-  if (h.lower) { var L = h.lower, q = Math.min(1, (now - L.t0) / L.ms); h.off = L.to * (1 - Math.pow(1 - q, 3)); if (q >= 1) { h.off = L.to; h.lower = null; sfx('tick'); if (L.done) L.done(); } }
+  if (h.lower) {
+    var L = h.lower, q = Math.min(1, (now - L.t0) / L.ms); h.off = L.to * (1 - Math.pow(1 - q, 3));
+    if (q >= 1) {
+      h.off = L.to; h.lower = null; var cp = hangPos();
+      /* the payoff moment: caps touch */
+      sfx('clink'); shakeNow(6, 250); flashNow(140); confettiBurst(cp.x, cp.cap, 70);
+      if (L.done) L.done();
+    }
+  }
   if (h.fall) {
     var f = h.fall, s = hangSpec(), landY = NC.TABLE_Y - s.w / 2 - 1;
     f.vy += 0.75 * k; f.y += f.vy * k;
     f.rot = Math.PI + Math.min(1, Math.max(0, (f.y - f.y0) / Math.max(1, landY - f.y0))) * Math.PI * 0.5;
     if (f.y >= landY) {
       f.y = landY; f.rot = Math.PI * 1.5; var d = f.done; f.done = null;
-      spawnDrops(f.x, NC.TABLE_Y - 6, 170, 1.25); sfx('splash');
+      spawnDrops(f.x, NC.TABLE_Y - 6, RM ? 40 : 100, 1.25); sfx('splash'); shakeNow(8, 260);
       R.puddle = { x: f.x, t0: now };
       if (d) setTimeout(d, 750);
     }
@@ -507,11 +538,15 @@ function updateHang(now, dt) {
   for (var i = R.splash.length - 1; i >= 0; i--) {
     var d2 = R.splash[i]; d2.vy += 0.5 * k; d2.x += d2.vx * k; d2.y += d2.vy * k;
     var ground = d2.x >= tableL && d2.x <= tableR ? NC.TABLE_Y : NC.FLOOR_Y;
-    if (d2.vy > 0 && d2.y >= ground) R.splash.splice(i, 1);
+    if (d2.vy > 0 && d2.y >= ground) { R.splash[i] = R.splash[R.splash.length - 1]; R.splash.pop(); }
+  }
+  for (var j = R.fx.length - 1; j >= 0; j--) {
+    var c = R.fx[j]; c.vy += 0.32 * k; c.vx *= 0.995; c.x += c.vx * k; c.y += c.vy * k; c.rot += c.vr * k; c.life -= k;
+    if (c.life <= 0 || c.y > NC.FLOOR_Y) { R.fx[j] = R.fx[R.fx.length - 1]; R.fx.pop(); }
   }
 }
 function drawBlade(p) {
-  var by = p.top - ROPE_BLADE_GAP, now = performance.now(), pr = R.cut.p;
+  var by = p.top - (R.hang ? R.hang.off : 0) - ROPE_BLADE_GAP, now = performance.now(), pr = R.cut.p; /* the rail stays put while the bottle is lowered */
   if (R.cut.snap) pr = Math.min(1, pr + (now - R.cut.snap) / 170 * (1 - pr));
   /* a chainsaw on a rail: guide bar pointing at the rope, chain running and the engine shaking while it creeps closer */
   var dx = 60 * (1 - pr), shake = Math.sin(now / 15) * 1.2, phase = (now / 10) % 7; /* the chain always runs, even after the throw stops the countdown */
@@ -528,12 +563,29 @@ function drawBlade(p) {
   ctx.fillStyle = '#1e2a23'; ctx.beginPath(); ctx.arc(104, -6, 5, 0, 7); ctx.fill();
   ctx.fillStyle = '#d9342b'; ctx.fillRect(56, -40, 6, 14);
   ctx.fillStyle = '#2b313a'; rr(112, -12, 14, 16, 5); ctx.fill(); ctx.stroke();
-  if (R.cut.on) { var sec = Math.max(0, Math.ceil((R.cut.ms - (now - R.cut.t0)) / 1000)); ctx.font = '26px "Luckiest Guy", "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = sec <= 3 ? '#d9342b' : '#1e2a23'; ctx.fillText(String(sec), 95, -54); }
+  if (R.cut.on) {
+    /* big, outlined countdown; at 3s or less it also gets a pulsing ring so it is not colour alone */
+    var sec = Math.max(0, Math.ceil((R.cut.ms - (now - R.cut.t0)) / 1000)), low = sec <= 3;
+    if (low) { ctx.strokeStyle = '#d9342b'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(95, -74, 26 + (RM ? 0 : 3 * Math.abs(Math.sin(now / 160))), 0, 7); ctx.stroke(); }
+    ctx.font = '44px "Luckiest Guy", "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.lineJoin = 'round'; ctx.lineWidth = 7; ctx.strokeStyle = '#fbf7ec'; ctx.strokeText(String(sec), 95, -60);
+    ctx.fillStyle = low ? '#d9342b' : '#1e2a23'; ctx.fillText(String(sec), 95, -60);
+  }
   ctx.restore();
 }
 function drawHang() {
   var h = R.hang; if (!h) return;
   var p = hangPos(), s = hangSpec(), now = performance.now();
+  if (!h.fall) {
+    /* contact shadow under the hanging bottle, and (on your turn) a pulsing target + ghost bottle showing where to land */
+    ctx.save(); ctx.globalAlpha = 0.16; ctx.fillStyle = '#1e2a23'; ctx.beginPath(); ctx.ellipse(p.x, NC.TABLE_Y - 1, 24, 5, 0, 0, 7); ctx.fill(); ctx.restore();
+    if (R.state === 'idle' && h.off === 0) {
+      var tol = NC.STAGES.hang.hang.tol, pulse = 0.5 + 0.35 * Math.sin(now / 300);
+      ctx.save(); ctx.strokeStyle = 'rgba(244,180,27,' + pulse.toFixed(2) + ')'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(p.x, NC.TABLE_Y - 2, tol + 12, 6, 0, 0, 7); ctx.stroke();
+      ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(30,42,35,.35)'; ctx.lineWidth = 2;
+      ctx.strokeRect(p.x - s.w / 2, NC.TABLE_Y - s.h, s.w, s.h); ctx.strokeRect(p.x - s.capW / 2, NC.TABLE_Y - s.h - s.capH, s.capW, s.capH);
+      ctx.restore();
+    }
+  }
   if (R.puddle) { var q = Math.min(1, (now - R.puddle.t0) / 900), w = 20 + 150 * (1 - Math.pow(1 - q, 3)); ctx.save(); ctx.fillStyle = splashColor(); ctx.beginPath(); ctx.ellipse(R.puddle.x, NC.TABLE_Y - 1, w, 7, 0, 0, 7); ctx.fill(); ctx.restore(); }
   if (!h.fall) {
     /* pendulum: rope and bottle rotate about a pivot 260 px above the bottle */
@@ -552,9 +604,15 @@ function drawHang() {
   }
 }
 function drawSplash() {
-  if (!R.splash.length) return;
-  ctx.save(); ctx.fillStyle = splashColor();
-  R.splash.forEach(function (d) { ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, 7); ctx.fill(); });
+  if (!R.splash.length && !R.fx.length) return;
+  ctx.save();
+  if (R.splash.length) {
+    /* one path for all drops: cheaper on phones and in the recording */
+    ctx.fillStyle = splashColor(); ctx.beginPath();
+    for (var i = 0; i < R.splash.length; i++) { var d = R.splash[i]; ctx.moveTo(d.x + d.r, d.y); ctx.arc(d.x, d.y, d.r, 0, 7); }
+    ctx.fill();
+  }
+  for (var j = 0; j < R.fx.length; j++) { var c = R.fx[j]; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.rot); ctx.fillStyle = c.col; ctx.globalAlpha = Math.min(1, c.life / 30); ctx.fillRect(-c.r, -c.r / 2, c.r * 2, c.r); ctx.restore(); }
   ctx.restore();
 }
 

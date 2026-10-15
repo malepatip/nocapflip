@@ -39,7 +39,10 @@ function fmt(n) { return (n < 0 ? '-' : '') + Math.abs(n).toLocaleString('en-US'
 /* ---------- tiny synth sounds (start after a tap) ---------- */
 var AC = null, OUT = null, ADEST = null;
 function audio() {
-  if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); OUT = AC.createGain(); OUT.gain.value = 1; OUT.connect(AC.destination); try { ADEST = AC.createMediaStreamDestination(); OUT.connect(ADEST); } catch (e) { ADEST = null; } fartPreload(); }
+  if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); OUT = AC.createGain(); OUT.gain.value = 0.9;
+    /* soft limiter so stacked sounds (farts + synth + clips) never clip, in the speakers or in the recording */
+    var lim = AC.createDynamicsCompressor(); lim.threshold.value = -14; lim.knee.value = 12; lim.ratio.value = 6; lim.attack.value = 0.003; lim.release.value = 0.2;
+    OUT.connect(lim); lim.connect(AC.destination); try { ADEST = AC.createMediaStreamDestination(); lim.connect(ADEST); } catch (e) { ADEST = null; } fartPreload(); }
   if (AC.state === 'suspended') { try { AC.resume(); } catch (e) {} }
   if (S.audio === 'clean') cleanPreload();
   return AC;
@@ -70,9 +73,25 @@ function sfx(kind) {
     o.connect(g); g.connect(OUT);
     if (kind === 'land') { o.type = 'triangle'; o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(880, t + .08); g.gain.setValueAtTime(.18, t); g.gain.exponentialRampToValueAtTime(.001, t + .35); o.start(t); o.stop(t + .36); }
     else if (kind === 'cap') { [523, 659, 784, 1046].forEach(function (f, i) { var o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'square'; o2.frequency.value = f; o2.connect(g2); g2.connect(OUT); g2.gain.setValueAtTime(.08, t + i * .09); g2.gain.exponentialRampToValueAtTime(.001, t + i * .09 + .3); o2.start(t + i * .09); o2.stop(t + i * .09 + .32); }); o.frequency.value = 1; g.gain.value = 0; o.start(t); o.stop(t + .01); }
-    else if (kind === 'splash') { var nb = AC.createBuffer(1, AC.sampleRate * 0.7, AC.sampleRate), nd = nb.getChannelData(0); for (var ni = 0; ni < nd.length; ni++) nd[ni] = (Math.random() * 2 - 1) * Math.pow(1 - ni / nd.length, 2); var ns = AC.createBufferSource(), nf = AC.createBiquadFilter(), ng = AC.createGain(); ns.buffer = nb; nf.type = 'lowpass'; nf.frequency.setValueAtTime(5200, t); nf.frequency.exponentialRampToValueAtTime(500, t + .6); ns.connect(nf); nf.connect(ng); ng.connect(OUT); ng.gain.setValueAtTime(.5, t); ng.gain.exponentialRampToValueAtTime(.001, t + .7); ns.start(t); }
-    else if (kind === 'snip') { o.type = 'sawtooth'; o.frequency.setValueAtTime(70, t); o.frequency.linearRampToValueAtTime(130, t + .25); o.frequency.linearRampToValueAtTime(60, t + .6); g.gain.setValueAtTime(.12, t); g.gain.exponentialRampToValueAtTime(.001, t + .62); var lf = AC.createOscillator(), lg = AC.createGain(); lf.frequency.value = 38; lg.gain.value = .06; lf.connect(lg); lg.connect(g.gain); lf.start(t); lf.stop(t + .62); o.start(t); o.stop(t + .63); }
-    else if (kind === 'tick') { o.type = 'square'; o.frequency.value = 1200; g.gain.setValueAtTime(.05, t); g.gain.exponentialRampToValueAtTime(.001, t + .04); o.start(t); o.stop(t + .05); }
+    else if (kind === 'splash') {
+      /* softer, less hissy: band-passed noise sweeping down, plus a low bloop and a thump */
+      var nb = AC.createBuffer(1, AC.sampleRate * 0.7, AC.sampleRate), nd = nb.getChannelData(0); for (var ni = 0; ni < nd.length; ni++) nd[ni] = (Math.random() * 2 - 1) * Math.pow(1 - ni / nd.length, 2);
+      var ns = AC.createBufferSource(), nf = AC.createBiquadFilter(), ng = AC.createGain(); ns.buffer = nb; nf.type = 'bandpass'; nf.Q.value = 0.8; nf.frequency.setValueAtTime(1800, t); nf.frequency.exponentialRampToValueAtTime(300, t + .6);
+      ns.connect(nf); nf.connect(ng); ng.connect(OUT); ng.gain.setValueAtTime(.32, t); ng.gain.exponentialRampToValueAtTime(.001, t + .7); ns.start(t);
+      o.type = 'sine'; o.frequency.setValueAtTime(180, t); o.frequency.exponentialRampToValueAtTime(70, t + .25); g.gain.setValueAtTime(.3, t); g.gain.exponentialRampToValueAtTime(.001, t + .3); o.start(t); o.stop(t + .32);
+    }
+    else if (kind === 'snip') {
+      /* chainsaw bite: low saw through a lowpass, revving up and down */
+      var lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; o.disconnect(); o.connect(lp); lp.connect(g);
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(70, t); o.frequency.linearRampToValueAtTime(130, t + .25); o.frequency.linearRampToValueAtTime(60, t + .6);
+      g.gain.setValueAtTime(.16, t); g.gain.exponentialRampToValueAtTime(.001, t + .62); o.start(t); o.stop(t + .63);
+    }
+    else if (kind === 'clink') {
+      /* cap-to-cap: two bright glass-like pings and a small riser */
+      [1760, 2637].forEach(function (f, i) { var o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'sine'; o2.frequency.value = f; o2.connect(g2); g2.connect(OUT); g2.gain.setValueAtTime(.1, t + i * .05); g2.gain.exponentialRampToValueAtTime(.001, t + i * .05 + .45); o2.start(t + i * .05); o2.stop(t + i * .05 + .47); });
+      o.type = 'triangle'; o.frequency.setValueAtTime(400, t); o.frequency.exponentialRampToValueAtTime(900, t + .2); g.gain.setValueAtTime(.06, t); g.gain.exponentialRampToValueAtTime(.001, t + .22); o.start(t); o.stop(t + .23);
+    }
+    else if (kind === 'tick') { o.type = 'triangle'; o.frequency.value = 880; g.gain.setValueAtTime(.09, t); g.gain.exponentialRampToValueAtTime(.001, t + .06); o.start(t); o.stop(t + .07); }
     else if (kind === 'tap') { o.type = 'sine'; o.frequency.value = 700; g.gain.setValueAtTime(.06, t); g.gain.exponentialRampToValueAtTime(.001, t + .08); o.start(t); o.stop(t + .09); }
     else if (kind === 'win') { [392, 523, 659, 784].forEach(function (f, i) { var o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'triangle'; o2.frequency.value = f; o2.connect(g2); g2.connect(OUT); g2.gain.setValueAtTime(.12, t + i * .12); g2.gain.exponentialRampToValueAtTime(.001, t + i * .12 + .4); o2.start(t + i * .12); o2.stop(t + i * .12 + .42); }); o.frequency.value = 1; g.gain.value = 0; o.start(t); o.stop(t + .01); if (clean) { if (!cleanPlay('nice')) niceVoice(); } }
   } catch (e) {}

@@ -202,7 +202,7 @@ function drain() {
   var t = NET.queue.shift(); NET.played = Math.max(NET.played, t.seq);
   if (M.done) return drain();
   M.busy = true; inputEnabled = false; R.aim = null; M.turn = t.p; M.seq = t.seq; M.lastO = t.o; updateHud(); setHint('<b>' + esc(M.players[t.p].name) + '</b> flipped');
-  var r = score(t.o, t.p, false);
+  var r = score(t.o, t.p, false, decTrail(t.tr));
   present(t.o, t.p, r, decTrail(t.tr), t.skin, false, function () { M.busy = false; if (NET.queue.length) drain(); else applyRoom(); });
 }
 function applyRoom() {
@@ -343,7 +343,8 @@ function tapePlay() {
     if (!M || M.id !== id || M.mode !== 'tape' || M.done) return;
     if (i >= M.tape.length) { endMatch(M.tapeWinner >= 0 ? M.tapeWinner : leaderIdx()); return; }
     var t = M.tape[i++]; M.turn = t.p; M.seq = t.seq; updateHud(); setHint('<b>' + esc(M.players[t.p].name) + '</b> · flip ' + t.seq + ' of ' + M.tape.length);
-    var r = score(t.o, t.p, false); M.busy = true;
+    if (M.stageId === 'hang' && (M.lastO === 'stack' || M.lastO === 'cut')) hangReset(hangSkin()); M.lastO = t.o;
+    var r = score(t.o, t.p, false, decTrail(t.tr)); M.busy = true;
     present(t.o, t.p, r, decTrail(t.tr), t.skin, false, function () { M.busy = false; setTimeout(step, 400); });
   };
   step();

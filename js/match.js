@@ -97,7 +97,7 @@ function hangSkin() { var a = ['tap', 'camo', 'water', 'glitter']; return a[Math
 onCutExpire = function () {
   if (!M || M.done || M.stageId !== 'hang' || !myTurn() || isAI() || M.busy || R.state !== 'idle') return;
   var id = M.id; inputEnabled = false; drag = null; R.aim = null; M.last = { power: 0, angle: 0 }; M.busy = true;
-  setHint('The blade got the rope · turn lost');
+  setHint('Chainsaw got the rope · turn lost');
   hangCutNow(function () { if (!M || M.id !== id) return; M.busy = false; onOutcome('cut', []); });
 };
 function clockStart() {
@@ -122,12 +122,23 @@ function beginTurn() {
   if (hang) { if (M.lastO === 'stack' || M.lastO === 'cut') hangReset(hangSkin()); M.lastO = ''; cutPark(); }
   updateHud(); R.state = 'idle'; R.aim = null; R.skin = M.players[M.turn].skin; R.pose = null;
   var who = esc(M.players[M.turn].name);
-  if (isAI()) { inputEnabled = false; setHint('<b>' + who + '</b> is flipping…'); var id = M.id; setTimeout(function () { if (M && M.id === id && current === 'match') aiThrow(); }, 900); }
-  else if (myTurn()) { inputEnabled = true; setHint((M.mode === 'two' ? '<b>' + who + '</b>, s' : 'S') + 'wipe <b>up</b> to flip' + (hang ? ' · land it under the bottle before the blade cuts' : '') + (R.lastHuman ? ' · Space repeats your last flip' : '')); clockStart(); if (hang) cutStart(CUT_MS); }
+  if (isAI()) {
+    inputEnabled = false; setHint('<b>' + who + '</b> is flipping…'); var id = M.id;
+    /* on the hang stage the kid races the saw: a random think time, with the blade visibly creeping (visual only, the kid never gets cut) */
+    var think = hang ? 1500 + Math.random() * 3500 : 900; if (hang) cutStart(CUT_MS);
+    setTimeout(function () { if (M && M.id === id && current === 'match') aiThrow(); }, think);
+  }
+  else if (myTurn()) {
+    inputEnabled = true;
+    /* first time on this stage (not link play): the first flip is free, the chainsaw waits */
+    var freeFlip = hang && !S.seenCut && M.mode !== 'link';
+    setHint(freeFlip ? 'First flip is free · swipe <b>up</b> with a medium swipe so it lands under the hanging bottle' : (M.mode === 'two' ? '<b>' + who + '</b>, s' : 'S') + 'wipe <b>up</b> to flip' + (hang ? ' · land it under the bottle before the chainsaw gets the rope' : '') + (R.lastHuman && window.matchMedia && matchMedia('(pointer:fine)').matches ? ' · Space repeats your last flip' : ''));
+    clockStart(); if (hang && !freeFlip) cutStart(CUT_MS);
+  }
   else { inputEnabled = false; setHint('Waiting on <b>' + who + '</b>…' + (M.host ? ' <button class="btn btn-ghost" id="btnSkip" style="min-height:28px;padding:2px 8px;font-size:13px">skip their turn</button>' : '')); var sk = $('btnSkip'); if (sk) sk.addEventListener('click', netSkipTurn); }
 }
 function humanThrow(power, angle) {
-  clockStop(); cutStop();
+  clockStop(); cutStop(); if (M.stageId === 'hang' && !S.seenCut) { S.seenCut = true; save(); }
   inputEnabled = false; R.lastHuman = { power: power, angle: angle }; S.stats.flips++; M.flips++;
   setHint('Power <b>' + power.toFixed(2) + '</b> · angle <b>' + Math.round(angle) + '°</b>'); sfx('tap');
   M.last = { power: power, angle: angle };
@@ -135,7 +146,8 @@ function humanThrow(power, angle) {
 }
 function aiThrow() {
   if (!M || current !== 'match') return;
-  var sk = SKINS[M.kid.skin], ideal = IDEAL[M.stageId][sk.type], sigma = 0.12 - 0.1 * M.kid.skill;
+  cutStop();
+  var sk = SKINS[M.kid.skin], ideal = IDEAL[M.stageId][sk.type], sigma = (M.stageId === 'hang' ? 0.14 : 0.12) - 0.1 * M.kid.skill;
   var p = ideal[0] * (1 + gauss() * sigma), a = ideal[1] + gauss() * sigma * 60; M.last = { power: p, angle: a };
   startThrow(p, a, M.kid.skin);
 }
@@ -148,13 +160,13 @@ onOutcome = function (o, trail) {
   M.lastO = o;
   if (M.mode === 'link' || M.mode === 'ladder' || M.mode === 'two') netThrow({ seq: M.seq + 1, p: me, skin: M.players[me].skin, power: M.last.power, angle: M.last.angle, o: o, tr: encTrail(trail) });
   M.seq++;
-  var r = score(o, me, human);
+  var r = score(o, me, human, trail);
   M.busy = true;
   var finish = function () { M.busy = false; if (M.mode === 'link') netAfterLocalThrow(); else afterThrow(); };
   present(o, me, r, trail, M.players[me].skin, true, finish);
 };
 /* Apply a throw to the scoreboard and aura; returns what to show. */
-function score(o, who, human) {
+function score(o, who, human, trail) {
   var delta = 0, text = '', cls = '', sub = '', name = M.players[who].name;
   if (o === 'land' || o === 'cap' || o === 'stack') {
     var big = o === 'cap' || o === 'stack';
@@ -165,7 +177,11 @@ function score(o, who, human) {
   } else {
     if (human) { delta = AURA.flop; S.stats.streak = 0; }
     text = o === 'cut' ? 'CUT' : o === 'wrong' ? (M.stageId === 'hang' ? 'NOT UNDER IT' : M.stageId === 'tray' ? 'NOT THE TRAY' : M.stageId === 'books' ? 'NOT THE BOOKS' : 'NOT THE STOOL') : (human ? 'FLOP' : name.toUpperCase() + ' FLOPPED'); cls = 'red small';
-    sub = (o === 'cut' ? 'the blade got it · turn lost' : '') + (delta ? (o === 'cut' ? ' · ' : '') + fmt(delta) + ' aura' : '');
+    /* one throw = one lesson: say how far off the bottle landed (display only, computed from the last trail frame) */
+    var miss = '';
+    if (M.stageId === 'hang' && o === 'wrong' && trail && trail.length) { var dxm = Math.round(trail[trail.length - 1][0] - NC.STAGES.hang.hang.x); miss = Math.abs(dxm) + ' px ' + (dxm < 0 ? 'left' : 'right') + ' of the bottle'; }
+    var lead = o === 'cut' ? 'chainsaw got it · turn lost' : miss;
+    sub = lead + (delta ? (lead ? ' · ' : '') + fmt(delta) + ' aura' : '');
   }
   if (human && S.stats.flips > 0 && S.stats.flips % 67 === 0) sub += (sub ? ' · ' : '') + 'SIX SEVEN';
   if (human) { S.aura = Math.max(0, S.aura + delta); save(); }
@@ -174,7 +190,7 @@ function score(o, who, human) {
 /* Show a throw's result: the settle, a slow-mo replay on a land, then the stamp. live=true means the throw was just simulated here. */
 function present(o, who, r, trail, skin, live, done) {
   var id = M.id, hang = M.stageId === 'hang', after = r.land ? 1300 : 900, snd = o === 'cut' ? '' : r.land ? (o === 'cap' || o === 'stack' ? 'cap' : 'land') : 'flop', played = false, hs = live ? 0.33 : 0.17;
-  if (o === 'stack') after = 2000;
+  if (o === 'stack') after = 1500;
   var stamp = function () {
     if (!M || M.id !== id) return;
     if (!played && snd) sfx(snd);
@@ -232,8 +248,8 @@ $('btnSave').addEventListener('click', function () { recSave(); });
 $('btnSaveHome').addEventListener('click', function () { recSave(); });
 $('btnSaveLobby').addEventListener('click', function () { recSave(); });
 $('btnNext').addEventListener('click', function () { guardVideo(this, function () { var i = nextKid(); if (i >= 0) openMatch({ mode: 'ladder', kid: KIDS[i] }); else show('table'); }); });
-$('btnAgain').addEventListener('click', function () { guardVideo(this, function () { if (M.mode === 'ladder') openMatch({ mode: 'ladder', kid: M.kid, stageId: M.practice ? M.stageId : undefined, goal: M.practice ? M.goal : undefined, practice: M.practice }); else if (M.mode === 'two') openMatch({ mode: 'two', players: M.players, stageId: M.stageId, venue: M.venue, goal: M.goal }); else if (M.mode === 'tape') tapeOpen(M.code); else netRematch(); }); });
-$('btnToTable').addEventListener('click', function () { guardVideo(this, function () { var mode = M.mode, toTable = mode === 'ladder' && !M.practice; cutStop(); recStop(false); netLeave(); M = null; R.slate = null; R.stamps = []; show(toTable ? 'table' : 'home'); }); });
+$('btnAgain').addEventListener('click', function () { guardVideo(this, function () { clearInterval(epTimer); if (M.mode === 'ladder') openMatch({ mode: 'ladder', kid: M.kid, stageId: M.practice ? M.stageId : undefined, goal: M.practice ? M.goal : undefined, practice: M.practice }); else if (M.mode === 'two') openMatch({ mode: 'two', players: M.players, stageId: M.stageId, venue: M.venue, goal: M.goal }); else if (M.mode === 'tape') tapeOpen(M.code); else netRematch(); }); });
+$('btnToTable').addEventListener('click', function () { guardVideo(this, function () { clearInterval(epTimer); var mode = M.mode, toTable = mode === 'ladder' && !M.practice; cutStop(); recStop(false); netLeave(); M = null; R.slate = null; R.stamps = []; show(toTable ? 'table' : 'home'); }); });
 $('btnQuit').addEventListener('click', function () { clearInterval(epTimer); var mode = M && M.mode, toTable = mode === 'ladder' && !M.practice; cutStop(); netRecordQuit(); recStop(false); netLeave(); M = null; R.slate = null; R.stamps = []; show(toTable ? 'table' : 'home'); });
 
 /* ---------- 2 player, one phone ---------- */
@@ -242,7 +258,7 @@ $('btnTwo').addEventListener('click', function () { twoStage = 'table'; sfx('tap
 /* ---------- Cut the bottle (hang stage) ---------- */
 $('btnCut').addEventListener('click', function () { sfx('tap'); $('sheetCut').hidden = !$('sheetCut').hidden; });
 $('btnCutCancel').addEventListener('click', function () { $('sheetCut').hidden = true; });
-$('btnCutKid').addEventListener('click', function () { sfx('tap'); var k = KIDS[Math.floor(Math.random() * KIDS.length)]; openMatch({ mode: 'ladder', kid: k, stageId: 'hang', goal: 2, practice: true }); });
+$('btnCutKid').addEventListener('click', function () { sfx('tap'); var k = KIDS[Math.floor(Math.random() * 5)]; /* the five easier kids: this stage is hard enough */ openMatch({ mode: 'ladder', kid: k, stageId: 'hang', goal: 2, practice: true }); });
 $('btnCutTwo').addEventListener('click', function () { twoStage = 'hang'; sfx('tap'); openMatch({ mode: 'two', stageId: 'hang', players: [{ id: 'p1', name: 'Player 1', skin: S.active }, { id: 'p2', name: 'Player 2', skin: S.active }] }); hideSheets(); $('sheetTwo').hidden = false; });
 $('btnCutLink').addEventListener('click', function () { $('sheetCut').hidden = true; $('btnLink').click(); var b = $('segStage').querySelector('[data-v="hang"]'); if (b) b.click(); });
 var twoVenue = 'cafeteria';
