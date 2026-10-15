@@ -500,22 +500,22 @@ function updateHang(now, dt) {
 function drawBlade(p) {
   var by = p.top - ROPE_BLADE_GAP, now = performance.now(), pr = R.cut.p;
   if (R.cut.snap) pr = Math.min(1, pr + (now - R.cut.snap) / 170 * (1 - pr));
-  /* a jigsaw on a rail: blade pointing at the rope, sawing back and forth while it creeps closer */
-  var dx = 80 * (1 - pr), sawing = R.cut.on || (R.cut.snap && now - R.cut.snap < 400), ox = sawing ? Math.sin(now / 22) * 6 : 0;
+  /* a chainsaw on a rail: guide bar pointing at the rope, chain running and the engine shaking while it creeps closer */
+  var dx = 60 * (1 - pr), sawing = R.cut.on || (R.cut.snap && now - R.cut.snap < 400), shake = sawing ? Math.sin(now / 15) * 1.2 : 0, phase = sawing ? (now / 10) % 7 : 0;
   ctx.save();
   ctx.strokeStyle = '#6c737b'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x - 6, by + 17); ctx.lineTo(p.x + 170, by + 17); ctx.stroke();
-  ctx.translate(p.x - 2 + dx, by);
-  ctx.save(); ctx.translate(ox, 0); ctx.fillStyle = '#cfd6dc'; ctx.strokeStyle = '#1e2a23'; ctx.lineWidth = 1.5;
-  ctx.fillRect(0, -3, 56, 6); ctx.strokeRect(0, -3, 56, 6);
-  for (var ti = 0; ti < 8; ti++) { ctx.beginPath(); ctx.moveTo(ti * 7, 3); ctx.lineTo(ti * 7 + 3.5, 9); ctx.lineTo(ti * 7 + 7, 3); ctx.closePath(); ctx.fill(); ctx.stroke(); }
-  ctx.restore();
+  ctx.translate(p.x - 2 + dx, by + shake);
   ctx.strokeStyle = '#1e2a23'; ctx.lineWidth = 2.5;
-  ctx.fillStyle = '#2b313a'; ctx.beginPath(); ctx.moveTo(62, -26); ctx.lineTo(66, -48); ctx.lineTo(98, -48); ctx.lineTo(102, -26); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#1f6fd0'; rr(54, -26, 50, 34, 8); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#f4b41b'; ctx.fillRect(58, -12, 42, 5);
-  ctx.fillStyle = '#d9342b'; ctx.fillRect(84, -26, 7, 10);
-  ctx.fillStyle = '#6c737b'; ctx.fillRect(46, -8, 10, 16); ctx.strokeRect(46, -8, 10, 16);
-  if (R.cut.on) { var sec = Math.max(0, Math.ceil((R.cut.ms - (now - R.cut.t0)) / 1000)); ctx.font = '26px "Luckiest Guy", "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = sec <= 3 ? '#d9342b' : '#1e2a23'; ctx.fillText(String(sec), 80, -56); }
+  ctx.fillStyle = '#9aa3ab'; rr(0, -7, 66, 14, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#1e2a23';
+  for (var ti = 0; ti < 11; ti++) { var tx = 66 - ((ti * 7 + phase) % 77); if (tx < 2 || tx > 62) continue; ctx.beginPath(); ctx.moveTo(tx, -7); ctx.lineTo(tx + 3.5, -12); ctx.lineTo(tx + 7, -7); ctx.fill(); ctx.beginPath(); ctx.moveTo(tx, 7); ctx.lineTo(tx + 3.5, 12); ctx.lineTo(tx + 7, 7); ctx.fill(); }
+  ctx.fillStyle = '#2b313a'; rr(76, -46, 38, 14, 6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#f26b1d'; rr(60, -34, 56, 44, 9); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#d9d2c4'; rr(70, -26, 26, 14, 4); ctx.fill();
+  ctx.fillStyle = '#1e2a23'; ctx.beginPath(); ctx.arc(104, -6, 5, 0, 7); ctx.fill();
+  ctx.fillStyle = '#d9342b'; ctx.fillRect(56, -40, 6, 14);
+  ctx.fillStyle = '#2b313a'; rr(112, -12, 14, 16, 5); ctx.fill(); ctx.stroke();
+  if (R.cut.on) { var sec = Math.max(0, Math.ceil((R.cut.ms - (now - R.cut.t0)) / 1000)); ctx.font = '26px "Luckiest Guy", "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = sec <= 3 ? '#d9342b' : '#1e2a23'; ctx.fillText(String(sec), 95, -54); }
   ctx.restore();
 }
 function drawHang() {
