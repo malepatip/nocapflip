@@ -230,11 +230,14 @@ function surfaceAt(x) {
   st.platforms.forEach(function (p) { if (p.kind !== 'lip' && x >= p.x && x <= p.x + p.w) y = Math.min(y, p.y); });
   return y;
 }
+/* on the hang stage the board slides left so the hanging bottle and its rope never cover the score */
+function boardX() { return R.stageId === 'hang' ? 175 : NC.W / 2 + 40; }
+function boardY() { return R.stageId === 'hang' ? 330 : 360; }
 function drawBoard() {
   var b = R.board; if (!b) return;
   if (b.rows) {
     var h = 44 + b.rows.length * 26;
-    ctx.save(); ctx.translate(NC.W / 2 + 40, 360); ctx.rotate(-0.015);
+    ctx.save(); ctx.translate(boardX(), boardY()); ctx.rotate(-0.015);
     ctx.fillStyle = '#fbf7ec'; ctx.fillRect(-150, -h / 2, 300, h);
     ctx.fillStyle = 'rgba(244,180,27,.85)'; ctx.fillRect(-120, -h / 2 - 10, 50, 16); ctx.fillRect(70, -h / 2 - 10, 50, 16);
     ctx.font = '700 11px Fredoka, sans-serif'; ctx.fillStyle = '#5a6a5f'; ctx.textAlign = 'center'; ctx.fillText(b.goal, 0, -h / 2 + 22);
@@ -246,7 +249,7 @@ function drawBoard() {
     });
     ctx.restore(); return;
   }
-  ctx.save(); ctx.translate(NC.W / 2 + 40, 360); ctx.rotate(-0.015);
+  ctx.save(); ctx.translate(boardX(), boardY()); ctx.rotate(-0.015);
   ctx.fillStyle = '#fbf7ec'; ctx.fillRect(-150, -46, 300, 92);
   ctx.fillStyle = 'rgba(244,180,27,.85)'; ctx.fillRect(-120, -56, 50, 16); ctx.fillRect(70, -56, 50, 16);
   ctx.fillStyle = '#1e2a23'; ctx.font = '700 15px Fredoka, sans-serif'; ctx.textAlign = 'left'; ctx.fillText(b.l, -136, -6, 120); ctx.textAlign = 'right'; ctx.fillText(b.r, 136, -6, 120);
