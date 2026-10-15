@@ -39,7 +39,7 @@ GitHub `malepatip/nocapflip` -> Cloudflare Workers Builds (static assets). `wran
 - A blade timer (`CUT_MS` 12 s, match.js `cutStart`/`onCutExpire`, render.js `hangCutNow`) replaces the shot clock on this stage; expiry is outcome `cut` (turn lost, bottle drops and splashes). The timer stops when the throw is launched.
 - The hanger is a static Matter body; the swing when clipped is visual only (render.js `hangPoke`). `IDEAL.hang` was computed with `NC.searchIdeal('hang', ...)` in Node; recompute it if hang params or physics TUNE change.
 - Entry points: home `btnCut` -> `sheetCut` (vs kid = ladder mode with `practice: true`, 2P, link via `segStage` value `hang`). Link scoring/turn logic for `stack` is in net.js `netThrow`.
-- Recorder bot does not play this stage yet.
+- Recorder: `recorder/record-offline.js` plays this stage (`STAGE=hang`; `recorder/long.sh` = long-form record + YouTube upload on the phone). The online `record.js` does not.
 
 ## Open items
 - Ideas offered: 1200x630 social preview image; more venues (bus, science lab, locker room, main office).

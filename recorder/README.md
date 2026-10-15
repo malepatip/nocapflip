@@ -41,6 +41,34 @@ node record-offline.js 15
 
 Both wrappers also run `ffmpeg` after the recording loop to generate `.jpg` thumbnails for every mp4 that doesn't have one; `run-offline.sh` additionally transcodes each `.webm` → `.mp4` (H.264/AAC) and removes the webm.
 
+## Cut the bottle + long form (phone, one command)
+
+`long.sh` records N long-form **Cut the bottle** matches in offline mode and uploads them to YouTube:
+
+```bash
+chmod +x long.sh run-offline.sh      # first time only
+./long.sh            # 1 long video, uploaded UNLISTED so you can review it first
+./long.sh 3          # 3 videos
+PRIVACY=public ./long.sh
+NO_UPLOAD=1 ./long.sh                # record only
+STAGE= ./long.sh                     # classic random stages instead
+```
+
+Env knobs (also work with `run-offline.sh` directly; offline recorder only):
+
+| var | default | meaning |
+|---|---|---|
+| `STAGE` | random classic (`hang` in `long.sh`) | `hang` = Cut the bottle |
+| `GOAL` | long: 7 or 10, short: 2 (hang) | first-to-N stacks |
+| `CUT_RATE` | 0.1 | per-turn chance the bot stalls so the chainsaw cuts the rope (drama) |
+| `HANG_SIGMA` | 0.045 | aim noise on the hang stage; smaller = more stacks = shorter video |
+| `PRIVACY` | public (`long.sh`: unlisted) | written to the sidecar; `upload.js --privacy=` overrides |
+
+- The bot plays hang matches by throwing at `IDEAL.hang` with gaussian noise, lets the chainsaw win now and then, and counts outcomes via a wrapper on `onOutcome` (stacks, cuts, wrong, flops). The counts go in the sidecar (`match.stats`) and the YouTube description.
+- A long-form video must run **over 3 minutes**; a vertical video under that is classified as a Short by YouTube. The recorder prints a warning when it comes out shorter. Raise `GOAL` or `HANG_SIGMA` to lengthen it (a bigger sigma means fewer stacks).
+- `seenCut` is forced true so the chainsaw is live from the first turn (the game gives new players a free first flip).
+- The online (Browserbase) recorder, `record.js`, does not know the hang stage yet.
+
 ## Notes / known landmines
 
 - `bb.sessions.create({ api_timeout: 900 })` — the SDK field is `api_timeout`, **not** `timeout`. Passing `timeout` silently uses the 60s default and your session dies mid-match.
