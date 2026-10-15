@@ -40,7 +40,9 @@
     books: { table: [40, 500], target: 0, platforms: [
       { x: 255, y: TABLE_Y - 44, w: 140, h: 44, kind: 'books' } ] },
     stool: { table: [40, 250], target: 0, platforms: [
-      { x: 262, y: 790, w: 112, h: 16, kind: 'stool' } ] }
+      { x: 262, y: 790, w: 112, h: 16, kind: 'stool' } ] },
+    /* hang: a bottle hangs cap-down from the ceiling over the table. Land upright under it (cap under cap) to stack. */
+    hang:  { table: [40, 500], target: 'table', platforms: [], hang: { x: 350, capBottom: 400, tol: 20, bottle: 'water' } }
   };
 
   function norm(a) { a = a % (2 * Math.PI); if (a > Math.PI) a -= 2 * Math.PI; if (a <= -Math.PI) a += 2 * Math.PI; return a; }
@@ -61,9 +63,18 @@
       statics.push(b);
       if (p.kind !== 'lip') surfaces.push({ body: b, x0: p.x, x1: p.x + p.w, top: p.y, target: st.target === i, kind: p.kind });
     });
+    if (st.hang) {
+      /* static cap-down bottle: cap at the bottom, body above it, so a flipping bottle can bounce off it */
+      var hs = BOTTLES[st.hang.bottle], hx = st.hang.x, cb = st.hang.capBottom;
+      var hcap = M.Bodies.rectangle(hx, cb - hs.capH / 2, hs.capW, hs.capH, { isStatic: true, friction: 0.7, restitution: 0.1, label: 'hanger' });
+      var hbody = M.Bodies.rectangle(hx, cb - hs.capH - hs.h / 2, hs.w, hs.h, { isStatic: true, friction: 0.7, restitution: 0.1, label: 'hanger' });
+      statics.push(hcap, hbody);
+    }
     M.Composite.add(engine.world, statics);
     return { engine: engine, statics: statics, surfaces: surfaces, stage: st, stageId: stageId };
   }
+  /* a land counts as a stack when it is upright on the table, centred under the hanging bottle */
+  function stackLand(world, bottle) { var h = world.stage.hang; return !!h && Math.abs(bottle.position.x - h.x) <= h.tol; }
 
   function makeBottle(id, x, baseY) {
     var s = BOTTLES[id];
@@ -128,7 +139,7 @@
         M.Body.setPosition(b, { x: b.position.x, y: b.position.y - (capBottom2 - surf.top) });
         this.record();
         this.where = surf;
-        return this.finish(surf.target ? 'cap' : 'wrong');
+        return this.finish(surf.target && !w.stage.hang ? 'cap' : 'wrong');
       }
     }
     if (b.position.y > H + 80 || b.position.x < -120 || b.position.x > W + 120) return this.finish('flop');
@@ -137,8 +148,8 @@
       var lowest = -1e9; b.parts.slice(1).forEach(function (p) { lowest = Math.max(lowest, p.bounds.max.y); });
       var s = this.surfaceUnder(b.position.x, lowest, 5);
       this.where = s;
-      if (s && Math.abs(a) < TUNE.uprightTol) return this.finish(s.target ? 'land' : 'wrong');
-      if (s && Math.abs(Math.abs(a) - Math.PI) < TUNE.uprightTol) return this.finish(s.target ? 'cap' : 'wrong');
+      if (s && Math.abs(a) < TUNE.uprightTol) return this.finish(w.stage.hang ? (stackLand(w, b) ? 'stack' : 'wrong') : s.target ? 'land' : 'wrong');
+      if (s && Math.abs(Math.abs(a) - Math.PI) < TUNE.uprightTol) return this.finish(s.target && !w.stage.hang ? 'cap' : 'wrong');
       return this.finish('flop');
     }
     return null;
@@ -168,7 +179,7 @@
     var grid = [], np = Math.round((pmax - pmin) / ps) + 1, na = Math.round((amax - amin) / as) + 1;
     for (var i = 0; i < np; i++) { grid.push([]); for (var j = 0; j < na; j++) {
       var o = simulate(stageId, bottleId, pmin + i * ps, amin + j * as).outcome;
-      grid[i].push(o === 'land' || o === 'cap' ? 1 : 0);
+      grid[i].push(o === 'land' || o === 'cap' || o === 'stack' ? 1 : 0);
     } }
     var best = null;
     for (var i2 = 0; i2 < np; i2++) for (var j2 = 0; j2 < na; j2++) {

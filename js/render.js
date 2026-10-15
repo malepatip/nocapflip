@@ -277,9 +277,10 @@ function render() {
   /* fill the strip exposed above the room by the camera pan with the venue's wall-top color */
   if (R.camY > 0) { ctx.fillStyle = VENUES[vn].wallTop || '#8fb49a'; ctx.fillRect(0, 0, NC.W, Math.ceil(R.camY) + 1); }
   ctx.save(); ctx.translate(0, R.camY);
-  drawRoom(st); drawBoard();
+  drawRoom(st); drawBoard(); if (st.hang) drawHang();
   drawShadow(p.x, p.y, NC.BOTTLES[SKINS[p.skin].type].h);
   drawBottle(p.x, p.y, p.a, p.skin);
+  if (st.hang) drawSplash();
   if (R.state === 'idle') drawAim();
   ctx.restore();
   drawScoreHUD();
@@ -416,12 +417,132 @@ function recFile() { var d = new Date(), ds = d.getFullYear() + '-' + ('0' + (d.
 function recSize() { return REC.blob ? (REC.blob.size > 1048576 ? (REC.blob.size / 1048576).toFixed(1) + ' MB' : Math.round(REC.blob.size / 1024) + ' KB') : ''; }
 function recLen() { var t = REC.secs || 0; return Math.floor(t / 60) + ':' + ('0' + t % 60).slice(-2); }
 
+/* ---------- hang stage: the hanging bottle, the cutter, the splash ---------- */
+var ROPE_TOP = -1500, ROPE_BLADE_GAP = 90;
+var onCutExpire = null;
+R.cut = { on: false, t0: 0, ms: 0, p: 0, snap: 0, sec: -1 }; R.splash = []; R.puddle = null; R.hang = null;
+function hangSpec() { return NC.BOTTLES[NC.STAGES.hang.hang.bottle]; }
+function hangPos() { var st = NC.STAGES.hang.hang, s = hangSpec(), cb = st.capBottom + (R.hang ? R.hang.off : 0); return { x: st.x, cap: cb, y: cb - s.capH - s.h / 2, top: cb - s.capH - s.h }; }
+function hangReset(skin) { R.hang = { skin: skin || 'tap', off: 0, lower: null, fall: null, swing: null, prev: null, poked: false }; R.puddle = null; R.cut.on = false; R.cut.p = 0; R.cut.snap = 0; }
+hangReset();
+function cutStart(ms) { R.cut.on = true; R.cut.t0 = performance.now(); R.cut.ms = ms; R.cut.p = 0; R.cut.snap = 0; R.cut.sec = -1; }
+function cutStop() { R.cut.on = false; }
+function cutPark() { R.cut.on = false; R.cut.p = 0; R.cut.snap = 0; }
+function splashColor() { var sk = SKINS[R.hang ? R.hang.skin : 'tap']; return (sk && sk.liquid) || 'rgba(150,200,230,.6)'; }
+function spawnDrops(x, y, n, power) {
+  for (var i = 0; i < n; i++) {
+    var ang = -Math.PI * (0.05 + Math.random() * 0.9), sp = (2 + Math.random() * 9) * power;
+    R.splash.push({ x: x + (Math.random() - 0.5) * 30, y: y, vx: Math.cos(ang) * sp * 1.5, vy: Math.sin(ang) * sp - 2, r: 2 + Math.random() * 5 });
+  }
+}
+/* snip the rope: the blade snaps through, the bottle drops, hits the table and sprays water everywhere. done() runs once the mess has landed. */
+function hangCutNow(done) {
+  var h = R.hang; if (!h || h.fall) { if (done) done(); return; }
+  R.cut.on = false; R.cut.snap = performance.now(); sfx('snip');
+  var p = hangPos();
+  setTimeout(function () {
+    if (!R.hang || R.hang !== h) { if (done) done(); return; }
+    h.fall = { x: p.x, y0: p.y, y: p.y, vy: 0, rot: Math.PI, done: done }; spawnDrops(p.x, p.y, 28, 0.7);
+  }, 170);
+}
+/* after a stack: the rope pays out until the two caps touch */
+function hangLower(done) {
+  var h = R.hang; if (!h || h.fall) { if (done) done(); return; }
+  var sp = NC.BOTTLES[SKINS[R.skin].type], capTop = NC.TABLE_Y - sp.h - sp.capH;
+  h.swing = null; /* hang dead still so the caps meet */
+  h.lower = { t0: performance.now(), ms: 900, to: capTop - NC.STAGES.hang.hang.capBottom, done: done };
+}
+/* a flying bottle that clips the hanger sets it swinging a little (visual only; the stack check stays static) */
+function hangPoke(now) {
+  var h = R.hang, pos = null;
+  if (R.state === 'flight' && R.thr) { var b = R.thr.bottle.parts[1]; pos = { x: b.position.x, y: b.position.y }; }
+  else if (R.state === 'replay' && R.replay && R.replay.trail.length) { var fr = R.replay.trail[Math.min(R.replay.trail.length - 1, Math.floor(R.replay.i))]; if (fr) pos = { x: fr[0], y: fr[1] }; }
+  if (!pos) { h.prev = null; h.poked = false; return; }
+  var p = hangPos(), pr = h.prev; h.prev = pos;
+  if (!pr || h.poked) return;
+  var sp = Math.hypot(pos.x - pr.x, pos.y - pr.y);
+  if (Math.abs(pos.x - p.x) < 32 && pos.y > p.top - 34 && pos.y < p.cap + 34 && sp > 2.5) {
+    h.poked = true; h.swing = { t0: now, amp: Math.min(0.1, 0.02 + sp * 0.005), dir: pos.x < p.x ? 1 : -1 }; sfx('tick');
+  }
+}
+function updateHang(now, dt) {
+  var h = R.hang; if (!h) return;
+  var k = dt / NC.STEP;
+  if (!h.fall) hangPoke(now);
+  if (h.lower) { var L = h.lower, q = Math.min(1, (now - L.t0) / L.ms); h.off = L.to * (1 - Math.pow(1 - q, 3)); if (q >= 1) { h.off = L.to; h.lower = null; sfx('tick'); if (L.done) L.done(); } }
+  if (h.fall) {
+    var f = h.fall, s = hangSpec(), landY = NC.TABLE_Y - s.w / 2 - 1;
+    f.vy += 0.75 * k; f.y += f.vy * k;
+    f.rot = Math.PI + Math.min(1, Math.max(0, (f.y - f.y0) / Math.max(1, landY - f.y0))) * Math.PI * 0.5;
+    if (f.y >= landY) {
+      f.y = landY; f.rot = Math.PI * 1.5; var d = f.done; f.done = null;
+      spawnDrops(f.x, NC.TABLE_Y - 6, 170, 1.25); sfx('splash');
+      R.puddle = { x: f.x, t0: now };
+      if (d) setTimeout(d, 750);
+    }
+  }
+  if (R.cut.on) {
+    var el = now - R.cut.t0, left = R.cut.ms - el, sec = Math.ceil(left / 1000);
+    R.cut.p = Math.min(1, el / R.cut.ms);
+    if (sec !== R.cut.sec) { R.cut.sec = sec; if (sec > 0 && sec <= 3) sfx('tick'); }
+    if (left <= 0) { R.cut.on = false; R.cut.p = 1; if (onCutExpire) onCutExpire(); }
+  }
+  var tableL = NC.STAGES.hang.table[0], tableR = NC.STAGES.hang.table[1];
+  for (var i = R.splash.length - 1; i >= 0; i--) {
+    var d2 = R.splash[i]; d2.vy += 0.5 * k; d2.x += d2.vx * k; d2.y += d2.vy * k;
+    var ground = d2.x >= tableL && d2.x <= tableR ? NC.TABLE_Y : NC.FLOOR_Y;
+    if (d2.vy > 0 && d2.y >= ground) R.splash.splice(i, 1);
+  }
+}
+function drawBlade(p) {
+  var by = p.top - ROPE_BLADE_GAP, now = performance.now(), pr = R.cut.p;
+  if (R.cut.snap) pr = Math.min(1, pr + (now - R.cut.snap) / 170 * (1 - pr));
+  var dx = 130 * (1 - pr);
+  ctx.save();
+  ctx.strokeStyle = '#6c737b'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x - 6, by + 17); ctx.lineTo(p.x + 240, by + 17); ctx.stroke();
+  ctx.translate(p.x - 2 + dx, by);
+  ctx.fillStyle = '#cfd6dc'; ctx.strokeStyle = '#1e2a23'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(0, -26); ctx.lineTo(72, -26); ctx.lineTo(72, 14); ctx.lineTo(0, 14); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(1, -24); ctx.lineTo(1, 12); ctx.stroke();
+  ctx.fillStyle = '#1e2a23'; ctx.beginPath(); ctx.arc(54, -6, 5, 0, 7); ctx.fill();
+  ctx.fillStyle = '#7a1f2b'; ctx.strokeStyle = '#1e2a23'; ctx.lineWidth = 2.5; rr(72, -16, 48, 20, 6); ctx.fill(); ctx.stroke();
+  if (R.cut.on) { var sec = Math.max(0, Math.ceil((R.cut.ms - (now - R.cut.t0)) / 1000)); ctx.font = '26px "Luckiest Guy", "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = sec <= 3 ? '#d9342b' : '#1e2a23'; ctx.fillText(String(sec), 96, -34); }
+  ctx.restore();
+}
+function drawHang() {
+  var h = R.hang; if (!h) return;
+  var p = hangPos(), s = hangSpec(), now = performance.now();
+  if (R.puddle) { var q = Math.min(1, (now - R.puddle.t0) / 900), w = 20 + 150 * (1 - Math.pow(1 - q, 3)); ctx.save(); ctx.fillStyle = splashColor(); ctx.beginPath(); ctx.ellipse(R.puddle.x, NC.TABLE_Y - 1, w, 7, 0, 0, 7); ctx.fill(); ctx.restore(); }
+  if (!h.fall) {
+    /* pendulum: rope and bottle rotate about a pivot 260 px above the bottle */
+    var piv = p.top - 260, ang = 0;
+    if (h.swing) { var t = (now - h.swing.t0) / 1000; if (t > 4) h.swing = null; else ang = h.swing.amp * h.swing.dir * Math.exp(-2.6 * t) * Math.sin(2 * Math.PI * 1.2 * t); }
+    ctx.save(); ctx.strokeStyle = '#d8c49a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(p.x, ROPE_TOP); ctx.lineTo(p.x, piv); ctx.stroke();
+    ctx.translate(p.x, piv); ctx.rotate(ang); ctx.translate(-p.x, -piv);
+    ctx.beginPath(); ctx.moveTo(p.x, piv); ctx.lineTo(p.x, p.top); ctx.stroke();
+    ctx.fillStyle = '#8a6b3a'; ctx.beginPath(); ctx.arc(p.x, p.top - 2, 4, 0, 7); ctx.fill();
+    drawBottle(p.x, p.y, Math.PI, h.skin); ctx.restore();
+    drawBlade(p);
+  } else {
+    var by = p.top - ROPE_BLADE_GAP;
+    ctx.save(); ctx.strokeStyle = '#d8c49a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(p.x, ROPE_TOP); ctx.lineTo(p.x, by - 4); ctx.stroke(); ctx.restore();
+    drawBottle(h.fall.x, h.fall.y, h.fall.rot, h.skin);
+  }
+}
+function drawSplash() {
+  if (!R.splash.length) return;
+  ctx.save(); ctx.fillStyle = splashColor();
+  R.splash.forEach(function (d) { ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, 7); ctx.fill(); });
+  ctx.restore();
+}
+
 /* ---------- loop ---------- */
 var onOutcome = null;
 function frame(ts) {
   requestAnimationFrame(frame);
   if ($('match').hidden) return;
   var dt = Math.min(50, ts - (R.last || ts)); R.last = ts;
+  if (R.stageId === 'hang') updateHang(performance.now(), dt);
   if (R.state === 'flight' && R.thr) {
     R.acc += dt; var n = 0;
     while (R.acc >= NC.STEP && n < 4) { R.acc -= NC.STEP; n++; var o = R.thr.step(); if (o) { finishThrow(o); break; } }

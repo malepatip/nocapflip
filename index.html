@@ -202,6 +202,7 @@ label { font-size: 13px; font-weight: 700; color: var(--ink-2); display: flex; f
       </div>
       <div class="stack" style="gap:10px">
         <button class="btn btn-red btn-wide" id="btnLadder">Flip the table</button>
+        <button class="btn btn-yellow btn-wide" id="btnCut">Cut the bottle · new</button>
         <button class="btn btn-blue btn-wide" id="btnLink">Play by link · phones</button>
         <button class="btn btn-wide" id="btnTwo">2 player · one phone</button>
         <div class="row" style="flex-wrap:nowrap">
@@ -294,6 +295,18 @@ label { font-size: 13px; font-weight: 700; color: var(--ink-2); display: flex; f
         </div>
       </div>
 
+      <div class="sheet" id="sheetCut" hidden>
+        <div class="card">
+          <div class="ep">NEW GAME</div>
+          <div class="vs">CUT THE BOTTLE</div>
+          <p style="font-size:14px;color:var(--ink-2)">A bottle hangs upside down over the table. Flip yours so it lands upright right under it, cap to cap. Stack it and you go again. Take too long and the blade cuts the rope: water everywhere, turn lost.</p>
+          <button class="btn btn-red btn-wide" id="btnCutKid">Vs a kid</button>
+          <button class="btn btn-blue btn-wide" id="btnCutTwo">2 player · one phone</button>
+          <button class="btn btn-wide" id="btnCutLink">Play by link · phones</button>
+          <button class="btn btn-ghost btn-wide" id="btnCutCancel">Back</button>
+        </div>
+      </div>
+
       <div class="sheet" id="sheetTwo" hidden>
         <div class="card">
           <div class="ep">2 PLAYER · ONE PHONE</div>
@@ -316,7 +329,7 @@ label { font-size: 13px; font-weight: 700; color: var(--ink-2); display: flex; f
           <div class="eyebrow">Where</div>
           <div class="seg wrap" id="segVenue"><button aria-pressed="true" data-v="cafeteria">Cafeteria</button><button data-v="classroom">Classroom</button><button data-v="restroom">Restroom</button><button data-v="gym">Gym</button><button data-v="hallway">Hallway</button><button data-v="outside">Outside</button></div>
           <div class="eyebrow">Land it</div>
-          <div class="seg" id="segStage"><button aria-pressed="true" data-v="table">On the table</button><button data-v="tray">On the tray</button><button data-v="books">On the books</button><button data-v="stool">Onto the stool</button></div>
+          <div class="seg" id="segStage"><button aria-pressed="true" data-v="table">On the table</button><button data-v="tray">On the tray</button><button data-v="books">On the books</button><button data-v="stool">Onto the stool</button><button data-v="hang">Cut the bottle</button></div>
           <div class="eyebrow">First to</div>
           <div class="seg" id="segGoal"><button data-v="2">2</button><button aria-pressed="true" data-v="3">3</button><button data-v="5">5</button></div>
           <button class="toggle" id="togRoomRec" aria-pressed="true"><span class="dot"></span>Record this game as a tape</button>

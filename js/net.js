@@ -201,7 +201,7 @@ function drain() {
   if (!M || M.mode !== 'link' || M.busy || !NET.queue.length) return;
   var t = NET.queue.shift(); NET.played = Math.max(NET.played, t.seq);
   if (M.done) return drain();
-  M.busy = true; inputEnabled = false; R.aim = null; M.turn = t.p; M.seq = t.seq; updateHud(); setHint('<b>' + esc(M.players[t.p].name) + '</b> flipped');
+  M.busy = true; inputEnabled = false; R.aim = null; M.turn = t.p; M.seq = t.seq; M.lastO = t.o; updateHud(); setHint('<b>' + esc(M.players[t.p].name) + '</b> flipped');
   var r = score(t.o, t.p, false);
   present(t.o, t.p, r, decTrail(t.tr), t.skin, false, function () { M.busy = false; if (NET.queue.length) drain(); else applyRoom(); });
 }
@@ -230,9 +230,10 @@ function netThrow(t) {
     /* score on the table's current state, so a skip or another write at the same moment is not overwritten */
     return roomTxn(code, function (d) {
       if (!d || d.status !== 'playing' || d.seq >= t.seq) return null;
-      var pts = d.pts.slice(); pts[t.p] = (pts[t.p] || 0) + (t.o === 'cap' ? 2 : t.o === 'land' ? 1 : 0);
+      var pts = d.pts.slice(); pts[t.p] = (pts[t.p] || 0) + (t.o === 'cap' ? 2 : t.o === 'land' || t.o === 'stack' ? 1 : 0);
       var w = -1; pts.forEach(function (v, i) { if (w < 0 && v >= d.goal) w = i; });
-      var upd = { seq: t.seq, pts: pts, turn: w >= 0 ? d.turn : (t.p + 1) % d.players.length, last: { seq: t.seq, p: t.p, o: t.o } };
+      /* hang stage: a stack earns the same player another turn */
+      var upd = { seq: t.seq, pts: pts, turn: w >= 0 ? d.turn : (t.o === 'stack' && d.stage === 'hang') ? t.p : (t.p + 1) % d.players.length, last: { seq: t.seq, p: t.p, o: t.o } };
       if (w >= 0) { upd.status = 'done'; upd.winner = w; upd.ended = iso(); }
       return { upd: upd, res: { d: d, pts: pts, w: w } };
     }).then(function (r) { if (!r || r.w < 0) return; if (!r.d.record) wipeThrows(code); else tapeIndex(r.d, r.pts, r.w); });

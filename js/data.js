@@ -1,5 +1,5 @@
 /* ---------- game data ---------- */
-var IDEAL = {"table":{"water":[0.86,85,0.78],"glitter":[0.88,87.5,0.84],"sports":[0.86,87.5,0.98],"hype":[0.86,87.5,0.6],"flask":[0.86,85,0.48],"tumbler":[1,87.5,0.36]},"tray":{"water":[0.9,85,0.52],"glitter":[0.88,85,0.6],"sports":[0.9,85,0.62],"hype":[0.88,85,0.5],"flask":[0.88,85,0.3],"tumbler":[0.88,85,0.2]},"books":{"water":[0.88,85,0.4],"glitter":[0.88,85,0.4],"sports":[0.88,85,0.66],"hype":[0.88,85,0.42],"flask":[0.88,85,0.22],"tumbler":[0.86,85,0.28]},"stool":{"water":[0.86,85,0.48],"glitter":[0.84,85,0.42],"sports":[0.84,85,0.52],"hype":[0.82,85,0.42],"flask":[0.84,85,0.4],"tumbler":[0.7,87.5,0.38]}};
+var IDEAL = {"table":{"water":[0.86,85,0.78],"glitter":[0.88,87.5,0.84],"sports":[0.86,87.5,0.98],"hype":[0.86,87.5,0.6],"flask":[0.86,85,0.48],"tumbler":[1,87.5,0.36]},"tray":{"water":[0.9,85,0.52],"glitter":[0.88,85,0.6],"sports":[0.9,85,0.62],"hype":[0.88,85,0.5],"flask":[0.88,85,0.3],"tumbler":[0.88,85,0.2]},"books":{"water":[0.88,85,0.4],"glitter":[0.88,85,0.4],"sports":[0.88,85,0.66],"hype":[0.88,85,0.42],"flask":[0.88,85,0.22],"tumbler":[0.86,85,0.28]},"stool":{"water":[0.86,85,0.48],"glitter":[0.84,85,0.42],"sports":[0.84,85,0.52],"hype":[0.82,85,0.42],"flask":[0.84,85,0.4],"tumbler":[0.7,87.5,0.38]},"hang":{"water":[0.45,72.5,0.88],"glitter":[0.45,72.5,0.88],"sports":[0.45,72.5,0.88],"hype":[0.46,73.8,0.88],"flask":[0.45,73.8,0.74],"tumbler":[0.45,75,0.33]}};
 
 /* skins: how each bottle is drawn. body = plastic tint, label = band colour, cap = cap colour, liquid = contents */
 var SKINS = {
@@ -24,7 +24,7 @@ var KIDS = [
   { id: 'olivia', venue: 'hallway',  name: 'Olivia',  stool: '#8a6cf0', skill: 0.82, stage: 'books', skin: 'sports',  goal: 3, line: 'The sports-drink flip is her whole personality. Onto the books.' },
   { id: 'addison', venue: 'cafeteria', name: 'Addison', stool: '#c88ca0', skill: 0.9,  stage: 'table', skin: 'tumbler', goal: 4, line: '7th grade. Head of the table. Has the 40 oz. Has never flipped it. Nobody has.' }
 ];
-var STAGE_WORDS = { table: 'anywhere on the table', tray: 'on the lunch tray', books: 'on top of the textbooks', stool: 'off the table, onto the stool' };
+var STAGE_WORDS = { table: 'anywhere on the table', tray: 'on the lunch tray', books: 'on top of the textbooks', stool: 'off the table, onto the stool', hang: 'cap to cap under the hanging bottle' };
 var RANKS = [[0, 'NPC'], [300, 'mid'], [1000, 'lowkey goated'], [2500, 'sigma'], [6000, 'main character'], [15000, 'final boss']];
 var AURA = { land: 100, cap: 1000, flop: -25, win: 500, lose: -200, wrong: -25 };
 
@@ -70,6 +70,9 @@ function sfx(kind) {
     o.connect(g); g.connect(OUT);
     if (kind === 'land') { o.type = 'triangle'; o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(880, t + .08); g.gain.setValueAtTime(.18, t); g.gain.exponentialRampToValueAtTime(.001, t + .35); o.start(t); o.stop(t + .36); }
     else if (kind === 'cap') { [523, 659, 784, 1046].forEach(function (f, i) { var o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'square'; o2.frequency.value = f; o2.connect(g2); g2.connect(OUT); g2.gain.setValueAtTime(.08, t + i * .09); g2.gain.exponentialRampToValueAtTime(.001, t + i * .09 + .3); o2.start(t + i * .09); o2.stop(t + i * .09 + .32); }); o.frequency.value = 1; g.gain.value = 0; o.start(t); o.stop(t + .01); }
+    else if (kind === 'splash') { var nb = AC.createBuffer(1, AC.sampleRate * 0.7, AC.sampleRate), nd = nb.getChannelData(0); for (var ni = 0; ni < nd.length; ni++) nd[ni] = (Math.random() * 2 - 1) * Math.pow(1 - ni / nd.length, 2); var ns = AC.createBufferSource(), nf = AC.createBiquadFilter(), ng = AC.createGain(); ns.buffer = nb; nf.type = 'lowpass'; nf.frequency.setValueAtTime(5200, t); nf.frequency.exponentialRampToValueAtTime(500, t + .6); ns.connect(nf); nf.connect(ng); ng.connect(OUT); ng.gain.setValueAtTime(.5, t); ng.gain.exponentialRampToValueAtTime(.001, t + .7); ns.start(t); }
+    else if (kind === 'snip') { o.type = 'square'; o.frequency.setValueAtTime(1800, t); o.frequency.exponentialRampToValueAtTime(700, t + .07); g.gain.setValueAtTime(.12, t); g.gain.exponentialRampToValueAtTime(.001, t + .1); o.start(t); o.stop(t + .11); }
+    else if (kind === 'tick') { o.type = 'square'; o.frequency.value = 1200; g.gain.setValueAtTime(.05, t); g.gain.exponentialRampToValueAtTime(.001, t + .04); o.start(t); o.stop(t + .05); }
     else if (kind === 'tap') { o.type = 'sine'; o.frequency.value = 700; g.gain.setValueAtTime(.06, t); g.gain.exponentialRampToValueAtTime(.001, t + .08); o.start(t); o.stop(t + .09); }
     else if (kind === 'win') { [392, 523, 659, 784].forEach(function (f, i) { var o2 = AC.createOscillator(), g2 = AC.createGain(); o2.type = 'triangle'; o2.frequency.value = f; o2.connect(g2); g2.connect(OUT); g2.gain.setValueAtTime(.12, t + i * .12); g2.gain.exponentialRampToValueAtTime(.001, t + i * .12 + .4); o2.start(t + i * .12); o2.stop(t + i * .12 + .42); }); o.frequency.value = 1; g.gain.value = 0; o.start(t); o.stop(t + .01); if (clean) { if (!cleanPlay('nice')) niceVoice(); } }
   } catch (e) {}
