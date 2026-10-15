@@ -203,6 +203,13 @@ label { font-size: 13px; font-weight: 700; color: var(--ink-2); display: flex; f
       <div class="stack" style="gap:10px">
         <button class="btn btn-red btn-wide" id="btnLadder">Flip the table</button>
         <button class="btn btn-yellow btn-wide" id="btnCut">Cut the bottle · new</button>
+        <div class="stack" id="sheetCut" hidden style="gap:10px;padding:12px;border:3px solid #1e2a23;border-radius:16px;background:#fbf7ec">
+          <p style="font-size:14px;margin:0">A bottle hangs upside down over the table. Flip yours so it lands upright right under it, cap to cap. Stack it and you go again. Take too long and the blade cuts the rope: water everywhere, turn lost.</p>
+          <button class="btn btn-red btn-wide" id="btnCutKid">Vs a kid</button>
+          <button class="btn btn-blue btn-wide" id="btnCutTwo">2 player · one phone</button>
+          <button class="btn btn-wide" id="btnCutLink">Play by link · phones</button>
+          <button class="btn btn-ghost btn-wide" id="btnCutCancel">Back</button>
+        </div>
         <button class="btn btn-blue btn-wide" id="btnLink">Play by link · phones</button>
         <button class="btn btn-wide" id="btnTwo">2 player · one phone</button>
         <div class="row" style="flex-wrap:nowrap">
@@ -292,18 +299,6 @@ label { font-size: 13px; font-weight: 700; color: var(--ink-2); display: flex; f
           <button class="btn btn-red btn-wide" id="btnNext">Next kid</button>
           <button class="btn btn-wide" id="btnAgain">Run it back</button>
           <button class="btn btn-ghost btn-wide" id="btnToTable">Back to the table</button>
-        </div>
-      </div>
-
-      <div class="sheet" id="sheetCut" hidden>
-        <div class="card">
-          <div class="ep">NEW GAME</div>
-          <div class="vs">CUT THE BOTTLE</div>
-          <p style="font-size:14px;color:var(--ink-2)">A bottle hangs upside down over the table. Flip yours so it lands upright right under it, cap to cap. Stack it and you go again. Take too long and the blade cuts the rope: water everywhere, turn lost.</p>
-          <button class="btn btn-red btn-wide" id="btnCutKid">Vs a kid</button>
-          <button class="btn btn-blue btn-wide" id="btnCutTwo">2 player · one phone</button>
-          <button class="btn btn-wide" id="btnCutLink">Play by link · phones</button>
-          <button class="btn btn-ghost btn-wide" id="btnCutCancel">Back</button>
         </div>
       </div>
 

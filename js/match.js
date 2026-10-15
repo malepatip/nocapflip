@@ -240,7 +240,7 @@ $('btnQuit').addEventListener('click', function () { clearInterval(epTimer); var
 var twoStage = 'table';
 $('btnTwo').addEventListener('click', function () { twoStage = 'table'; sfx('tap'); openMatch({ mode: 'two', players: [{ id: 'p1', name: 'Player 1', skin: S.active }, { id: 'p2', name: 'Player 2', skin: S.active }] }); hideSheets(); $('sheetTwo').hidden = false; });
 /* ---------- Cut the bottle (hang stage) ---------- */
-$('btnCut').addEventListener('click', function () { sfx('tap'); hideSheets(); $('sheetCut').hidden = false; });
+$('btnCut').addEventListener('click', function () { sfx('tap'); $('sheetCut').hidden = !$('sheetCut').hidden; });
 $('btnCutCancel').addEventListener('click', function () { $('sheetCut').hidden = true; });
 $('btnCutKid').addEventListener('click', function () { sfx('tap'); var k = KIDS[Math.floor(Math.random() * KIDS.length)]; openMatch({ mode: 'ladder', kid: k, stageId: 'hang', goal: 2, practice: true }); });
 $('btnCutTwo').addEventListener('click', function () { twoStage = 'hang'; sfx('tap'); openMatch({ mode: 'two', stageId: 'hang', players: [{ id: 'p1', name: 'Player 1', skin: S.active }, { id: 'p2', name: 'Player 2', skin: S.active }] }); hideSheets(); $('sheetTwo').hidden = false; });
